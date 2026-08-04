@@ -5,8 +5,31 @@ export async function getStreams() {
   return prisma.stream.findMany({ orderBy: { createdAt: "asc" } });
 }
 
+export async function getStreamsWithTransactionCounts() {
+  const streams = await getStreams();
+  return Promise.all(
+    streams.map(async (stream) => {
+      const transactionCount = await prisma.transaction.count({ where: { streamId: stream.id } });
+      return { stream, transactionCount };
+    })
+  );
+}
+
 export async function getAccounts() {
   return prisma.account.findMany({ orderBy: { createdAt: "asc" } });
+}
+
+export async function getAccountsWithUsageCounts() {
+  const accounts = await getAccounts();
+  return Promise.all(
+    accounts.map(async (account) => {
+      const [transactionCount, investmentCount] = await Promise.all([
+        prisma.transaction.count({ where: { accountId: account.id } }),
+        prisma.investment.count({ where: { accountId: account.id } }),
+      ]);
+      return { account, transactionCount, investmentCount };
+    })
+  );
 }
 
 export async function getLatestRmbToBdtRate() {

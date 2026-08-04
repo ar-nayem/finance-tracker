@@ -7,6 +7,7 @@ const links = [
   { href: "/", label: "Dashboard" },
   { href: "/transactions", label: "Transactions" },
   { href: "/investments", label: "Investments" },
+  { href: "/streams", label: "Manage" },
 ];
 
 export function Nav() {

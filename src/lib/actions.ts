@@ -160,3 +160,80 @@ export async function updateInvestmentStatus(formData: FormData) {
   await prisma.investment.update({ where: { id }, data: { status } });
   revalidatePath("/investments");
 }
+
+export async function createStream(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
+
+  if (!name) throw new Error("Stream name is required");
+  if (!currency) throw new Error("Currency is required");
+
+  const existing = await prisma.stream.findFirst({ where: { name } });
+  if (existing) throw new Error(`A stream named "${name}" already exists`);
+
+  await prisma.stream.create({ data: { name, currency } });
+
+  revalidatePath("/");
+  revalidatePath("/streams");
+  revalidatePath("/transactions");
+}
+
+export async function deleteStream(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing stream id");
+
+  const transactionCount = await prisma.transaction.count({ where: { streamId: id } });
+  if (transactionCount > 0) {
+    throw new Error(
+      `Can't delete: ${transactionCount} transaction(s) still use this stream. Delete or reassign them first.`
+    );
+  }
+
+  await prisma.stream.delete({ where: { id } });
+
+  revalidatePath("/");
+  revalidatePath("/streams");
+  revalidatePath("/transactions");
+}
+
+export async function createAccount(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
+  const type = String(formData.get("type") ?? "").trim() || "bank";
+  const role = String(formData.get("role") ?? "").trim() || "operating";
+
+  if (!name) throw new Error("Account name is required");
+  if (!currency) throw new Error("Currency is required");
+
+  const existing = await prisma.account.findFirst({ where: { name } });
+  if (existing) throw new Error(`An account named "${name}" already exists`);
+
+  await prisma.account.create({ data: { name, currency, type, role } });
+
+  revalidatePath("/");
+  revalidatePath("/streams");
+  revalidatePath("/transactions");
+  revalidatePath("/investments");
+}
+
+export async function deleteAccount(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing account id");
+
+  const [transactionCount, investmentCount] = await Promise.all([
+    prisma.transaction.count({ where: { accountId: id } }),
+    prisma.investment.count({ where: { accountId: id } }),
+  ]);
+  if (transactionCount > 0 || investmentCount > 0) {
+    throw new Error(
+      `Can't delete: ${transactionCount} transaction(s) and ${investmentCount} investment(s) still use this account. Delete or reassign them first.`
+    );
+  }
+
+  await prisma.account.delete({ where: { id } });
+
+  revalidatePath("/");
+  revalidatePath("/streams");
+  revalidatePath("/transactions");
+  revalidatePath("/investments");
+}
