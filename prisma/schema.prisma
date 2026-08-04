@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// currency: "RMB" | "BDT"
+model Stream {
+  id           String        @id @default(cuid())
+  name         String
+  currency     String
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}
+
+// type: "bank" | "wallet" | "cash"
+// role: "operating" | "spending" | "savings"
+model Account {
+  id           String        @id @default(cuid())
+  name         String
+  currency     String
+  type         String
+  role         String
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+  investments  Investment[]
+}
+
+// type: "income" | "expense"
+model Transaction {
+  id        String   @id @default(cuid())
+  date      DateTime
+  amount    Float
+  currency  String
+  type      String
+  category  String?
+  note      String?
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  streamId  String
+  stream    Stream   @relation(fields: [streamId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// Funded directly by a real account/wallet (Alipay, WeChat, bank), never by
+// a job or business stream directly. Available-to-invest = that account's
+// transaction balance minus what's already tied up in active investments,
+// plus returns paid back to it.
+// status: "active" | "exited" | "lost"
+model Investment {
+  id        String             @id @default(cuid())
+  name      String
+  amount    Float
+  currency  String
+  date      DateTime
+  type      String?
+  status    String             @default("active")
+  notes     String?
+  accountId String
+  account   Account            @relation(fields: [accountId], references: [id])
+  returns   InvestmentReturn[]
+  createdAt DateTime           @default(now())
+}
+
+model InvestmentReturn {
+  id           String     @id @default(cuid())
+  date         DateTime
+  amount       Float
+  currency     String
+  investmentId String
+  investment   Investment @relation(fields: [investmentId], references: [id])
+}
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  date         DateTime
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+
+  @@unique([date, fromCurrency, toCurrency])
+}
