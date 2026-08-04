@@ -5,6 +5,11 @@ export async function getStreams() {
   return prisma.stream.findMany({ orderBy: { createdAt: "asc" } });
 }
 
+export async function getCredentialUsername() {
+  const credential = await prisma.appCredential.findFirst();
+  return credential?.username ?? null;
+}
+
 export async function getStreamsWithTransactionCounts() {
   const streams = await getStreams();
   return Promise.all(

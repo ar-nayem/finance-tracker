@@ -1,5 +1,6 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { hashPassword } from "../src/lib/password";
 import "dotenv/config";
 
 const adapter = new PrismaBetterSqlite3({
@@ -40,6 +41,22 @@ async function main() {
     const existing = await prisma.stream.findFirst({ where: { name: s.name } });
     if (!existing) {
       await prisma.stream.create({ data: s });
+    }
+  }
+
+  const existingCredential = await prisma.appCredential.findFirst();
+  if (!existingCredential) {
+    const username = process.env.INITIAL_LOGIN_USERNAME;
+    const password = process.env.INITIAL_LOGIN_PASSWORD;
+    if (username && password) {
+      await prisma.appCredential.create({
+        data: { username, passwordHash: hashPassword(password) },
+      });
+      console.log("Seeded initial login credential for:", username);
+    } else {
+      console.log(
+        "No AppCredential exists yet, and INITIAL_LOGIN_USERNAME/INITIAL_LOGIN_PASSWORD not set — skipping. Set them in .env and re-run seed to create the first login."
+      );
     }
   }
 

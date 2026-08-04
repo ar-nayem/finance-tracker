@@ -3,6 +3,64 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createSession, deleteSession, verifySession } from "@/lib/session";
+import { hashPassword, verifyPassword } from "@/lib/password";
+
+export type LoginState = { error?: string } | undefined;
+
+export async function login(_prevState: LoginState, formData: FormData): Promise<LoginState> {
+  const username = String(formData.get("username") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  const credential = await prisma.appCredential.findFirst();
+  if (!credential || credential.username !== username || !verifyPassword(password, credential.passwordHash)) {
+    return { error: "Wrong username or password" };
+  }
+
+  await createSession(credential.id);
+  redirect("/");
+}
+
+export async function logout() {
+  await deleteSession();
+  redirect("/login");
+}
+
+export type ChangeCredentialsState = { error?: string; success?: string } | undefined;
+
+export async function changeCredentials(
+  _prevState: ChangeCredentialsState,
+  formData: FormData
+): Promise<ChangeCredentialsState> {
+  const session = await verifySession();
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newUsername = String(formData.get("newUsername") ?? "").trim();
+  const newPassword = String(formData.get("newPassword") ?? "");
+
+  const credential = await prisma.appCredential.findUniqueOrThrow({
+    where: { id: session.credentialId },
+  });
+
+  if (!verifyPassword(currentPassword, credential.passwordHash)) {
+    return { error: "Current password is wrong" };
+  }
+  if (!newUsername) {
+    return { error: "Username can't be empty" };
+  }
+  if (newPassword && newPassword.length < 8) {
+    return { error: "New password must be at least 8 characters" };
+  }
+
+  await prisma.appCredential.update({
+    where: { id: credential.id },
+    data: {
+      username: newUsername,
+      passwordHash: newPassword ? hashPassword(newPassword) : credential.passwordHash,
+    },
+  });
+
+  return { success: "Login credentials updated" };
+}
 
 function parseAmount(raw: FormDataEntryValue | null): number {
   const value = Number(raw);
@@ -13,6 +71,7 @@ function parseAmount(raw: FormDataEntryValue | null): number {
 }
 
 export async function createTransaction(formData: FormData) {
+  await verifySession();
   const accountId = String(formData.get("accountId") ?? "");
   const streamId = String(formData.get("streamId") ?? "");
   const type = String(formData.get("type") ?? "");
@@ -45,6 +104,7 @@ export async function createTransaction(formData: FormData) {
 }
 
 export async function deleteTransaction(formData: FormData) {
+  await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing transaction id");
   await prisma.transaction.delete({ where: { id } });
@@ -70,6 +130,7 @@ async function getAccountInvestableBalance(accountId: string) {
 }
 
 export async function createInvestment(formData: FormData) {
+  await verifySession();
   const name = String(formData.get("name") ?? "").trim();
   const accountId = String(formData.get("accountId") ?? "");
   const dateRaw = String(formData.get("date") ?? "");
@@ -106,6 +167,7 @@ export async function createInvestment(formData: FormData) {
 }
 
 export async function createInvestmentReturn(formData: FormData) {
+  await verifySession();
   const investmentId = String(formData.get("investmentId") ?? "");
   const dateRaw = String(formData.get("date") ?? "");
   const amount = parseAmount(formData.get("amount"));
@@ -128,6 +190,7 @@ export async function createInvestmentReturn(formData: FormData) {
 }
 
 export async function setExchangeRate(formData: FormData) {
+  await verifySession();
   const rate = Number(formData.get("rate"));
   if (!Number.isFinite(rate) || rate <= 0) throw new Error("Rate must be a positive number");
 
@@ -152,6 +215,7 @@ export async function setExchangeRate(formData: FormData) {
 }
 
 export async function updateInvestmentStatus(formData: FormData) {
+  await verifySession();
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || !["active", "exited", "lost"].includes(status)) {
@@ -162,6 +226,7 @@ export async function updateInvestmentStatus(formData: FormData) {
 }
 
 export async function createStream(formData: FormData) {
+  await verifySession();
   const name = String(formData.get("name") ?? "").trim();
   const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
 
@@ -179,6 +244,7 @@ export async function createStream(formData: FormData) {
 }
 
 export async function deleteStream(formData: FormData) {
+  await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing stream id");
 
@@ -197,6 +263,7 @@ export async function deleteStream(formData: FormData) {
 }
 
 export async function createAccount(formData: FormData) {
+  await verifySession();
   const name = String(formData.get("name") ?? "").trim();
   const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
   const type = String(formData.get("type") ?? "").trim() || "bank";
@@ -217,6 +284,7 @@ export async function createAccount(formData: FormData) {
 }
 
 export async function deleteAccount(formData: FormData) {
+  await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing account id");
 

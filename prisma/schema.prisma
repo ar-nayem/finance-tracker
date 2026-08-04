@@ -86,3 +86,11 @@ model ExchangeRate {
 
   @@unique([date, fromCurrency, toCurrency])
 }
+
+// Single row: the one login used to access this app.
+model AppCredential {
+  id           String   @id @default(cuid())
+  username     String
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}

@@ -1,8 +1,10 @@
 import {
   getStreamsWithTransactionCounts,
   getAccountsWithUsageCounts,
+  getCredentialUsername,
 } from "@/lib/data";
 import { createStream, deleteStream, createAccount, deleteAccount } from "@/lib/actions";
+import { ChangeCredentialsForm } from "@/components/change-credentials-form";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +12,10 @@ const ACCOUNT_TYPES = ["bank", "wallet", "cash"] as const;
 const ACCOUNT_ROLES = ["operating", "spending", "savings"] as const;
 
 export default async function StreamsPage() {
-  const [streams, accounts] = await Promise.all([
+  const [streams, accounts, currentUsername] = await Promise.all([
     getStreamsWithTransactionCounts(),
     getAccountsWithUsageCounts(),
+    getCredentialUsername(),
   ]);
 
   return (
@@ -186,6 +189,14 @@ export default async function StreamsPage() {
           })}
         </ul>
       </section>
+
+      {currentUsername && (
+        <section className="rounded-lg border border-border bg-muted p-4">
+          <h2 className="font-heading text-lg font-semibold">Login Credentials</h2>
+          <p className="text-sm text-foreground/60">Currently signed in as {currentUsername}.</p>
+          <ChangeCredentialsForm currentUsername={currentUsername} />
+        </section>
+      )}
     </div>
   );
 }

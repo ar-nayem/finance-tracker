@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { logout } from "@/lib/actions";
 
 const links = [
   { href: "/", label: "Dashboard" },
@@ -13,13 +14,15 @@ const links = [
 export function Nav() {
   const pathname = usePathname();
 
+  if (pathname === "/login") return null;
+
   return (
     <header className="border-b border-border bg-muted">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
         <span className="font-heading text-lg font-semibold tracking-tight">
           Finance Tracker
         </span>
-        <nav className="flex gap-1">
+        <nav className="flex items-center gap-1">
           {links.map((link) => {
             const active = pathname === link.href;
             return (
@@ -36,6 +39,14 @@ export function Nav() {
               </Link>
             );
           })}
+          <form action={logout}>
+            <button
+              type="submit"
+              className="cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-foreground/70 transition-colors duration-150 hover:bg-white/5 hover:text-destructive"
+            >
+              Logout
+            </button>
+          </form>
         </nav>
       </div>
     </header>
