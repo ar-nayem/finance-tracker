@@ -34,18 +34,20 @@ model Account {
 
 // type: "income" | "expense"
 model Transaction {
-  id        String   @id @default(cuid())
-  date      DateTime
-  amount    Float
-  currency  String
-  type      String
-  category  String?
-  note      String?
-  accountId String
-  account   Account  @relation(fields: [accountId], references: [id])
-  streamId  String
-  stream    Stream   @relation(fields: [streamId], references: [id])
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  date       DateTime
+  amount     Float
+  currency   String
+  type       String
+  category   String?
+  note       String?
+  accountId  String
+  account    Account   @relation(fields: [accountId], references: [id])
+  streamId   String
+  stream     Stream    @relation(fields: [streamId], references: [id])
+  documentId String?   @unique
+  document   Document? @relation(fields: [documentId], references: [id])
+  createdAt  DateTime  @default(now())
 }
 
 // Funded directly by a real account/wallet (Alipay, WeChat, bank), never by
@@ -54,18 +56,20 @@ model Transaction {
 // plus returns paid back to it.
 // status: "active" | "exited" | "lost"
 model Investment {
-  id        String             @id @default(cuid())
-  name      String
-  amount    Float
-  currency  String
-  date      DateTime
-  type      String?
-  status    String             @default("active")
-  notes     String?
-  accountId String
-  account   Account            @relation(fields: [accountId], references: [id])
-  returns   InvestmentReturn[]
-  createdAt DateTime           @default(now())
+  id         String             @id @default(cuid())
+  name       String
+  amount     Float
+  currency   String
+  date       DateTime
+  type       String?
+  status     String             @default("active")
+  notes      String?
+  accountId  String
+  account    Account            @relation(fields: [accountId], references: [id])
+  returns    InvestmentReturn[]
+  documentId String?            @unique
+  document   Document?          @relation(fields: [documentId], references: [id])
+  createdAt  DateTime           @default(now())
 }
 
 model InvestmentReturn {
@@ -74,7 +78,7 @@ model InvestmentReturn {
   amount       Float
   currency     String
   investmentId String
-  investment   Investment @relation(fields: [investmentId], references: [id])
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
 }
 
 model ExchangeRate {
@@ -93,4 +97,18 @@ model AppCredential {
   username     String
   passwordHash String
   updatedAt    DateTime @updatedAt
+}
+
+// Optional file attached to a Transaction or Investment (receipts,
+// calculation sheets, transition paperwork). File bytes live on disk under
+// UPLOADS_DIR; this row just tracks metadata + path.
+model Document {
+  id          String       @id @default(cuid())
+  fileName    String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+  createdAt   DateTime     @default(now())
+  transaction Transaction?
+  investment  Investment?
 }

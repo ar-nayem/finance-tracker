@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSession, deleteSession, verifySession } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -70,6 +71,24 @@ function parseAmount(raw: FormDataEntryValue | null): number {
   return value;
 }
 
+// Optional attachment on a transaction/investment creation form. Absent or
+// empty file input means "no attachment" — never required.
+async function saveOptionalAttachment(formData: FormData): Promise<string | null> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return null;
+
+  const { filePath, fileSize } = await saveDocumentFile(file);
+  const document = await prisma.document.create({
+    data: {
+      fileName: file.name,
+      filePath,
+      fileSize,
+      mimeType: file.type || "application/octet-stream",
+    },
+  });
+  return document.id;
+}
+
 export async function createTransaction(formData: FormData) {
   await verifySession();
   const accountId = String(formData.get("accountId") ?? "");
@@ -84,6 +103,7 @@ export async function createTransaction(formData: FormData) {
   if (type !== "income" && type !== "expense") throw new Error("Invalid type");
 
   const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
+  const documentId = await saveOptionalAttachment(formData);
 
   await prisma.transaction.create({
     data: {
@@ -95,6 +115,7 @@ export async function createTransaction(formData: FormData) {
       note,
       accountId,
       streamId,
+      documentId,
     },
   });
 
@@ -107,7 +128,13 @@ export async function deleteTransaction(formData: FormData) {
   await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing transaction id");
-  await prisma.transaction.delete({ where: { id } });
+
+  const transaction = await prisma.transaction.delete({ where: { id } });
+  if (transaction.documentId) {
+    const document = await prisma.document.delete({ where: { id: transaction.documentId } });
+    await deleteDocumentFile(document.filePath);
+  }
+
   revalidatePath("/");
   revalidatePath("/transactions");
 }
@@ -149,6 +176,8 @@ export async function createInvestment(formData: FormData) {
     );
   }
 
+  const documentId = await saveOptionalAttachment(formData);
+
   await prisma.investment.create({
     data: {
       name,
@@ -158,12 +187,28 @@ export async function createInvestment(formData: FormData) {
       type,
       notes,
       accountId,
+      documentId,
     },
   });
 
   revalidatePath("/investments");
   revalidatePath("/");
   redirect("/investments");
+}
+
+export async function deleteInvestment(formData: FormData) {
+  await verifySession();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing investment id");
+
+  const investment = await prisma.investment.delete({ where: { id } });
+  if (investment.documentId) {
+    const document = await prisma.document.delete({ where: { id: investment.documentId } });
+    await deleteDocumentFile(document.filePath);
+  }
+
+  revalidatePath("/investments");
+  revalidatePath("/");
 }
 
 export async function createInvestmentReturn(formData: FormData) {

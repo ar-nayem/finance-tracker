@@ -1,6 +1,11 @@
 import { getAccountInvestableBalances, getInvestmentPortfolio } from "@/lib/data";
-import { createInvestment, createInvestmentReturn, updateInvestmentStatus } from "@/lib/actions";
-import { formatMoney, formatDate } from "@/lib/format";
+import {
+  createInvestment,
+  createInvestmentReturn,
+  deleteInvestment,
+  updateInvestmentStatus,
+} from "@/lib/actions";
+import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +19,12 @@ export default async function InvestmentsPage() {
   ]);
   const today = new Date().toISOString().slice(0, 10);
 
-  const totalInvested = investments.reduce((s, i) => s + i.amount, 0);
-  const totalReturned = investments.reduce((s, i) => s + i.totalReturned, 0);
+  const investedByCurrency = new Map<string, number>();
+  const returnedByCurrency = new Map<string, number>();
+  for (const inv of investments) {
+    investedByCurrency.set(inv.currency, (investedByCurrency.get(inv.currency) ?? 0) + inv.amount);
+    returnedByCurrency.set(inv.currency, (returnedByCurrency.get(inv.currency) ?? 0) + inv.totalReturned);
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -100,6 +109,15 @@ export default async function InvestmentsPage() {
             />
           </label>
 
+          <label className="flex flex-col gap-1 text-sm sm:col-span-2 lg:col-span-1">
+            <span className="text-foreground/60">Attach document (optional)</span>
+            <input
+              type="file"
+              name="file"
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-on-primary"
+            />
+          </label>
+
           <button
             type="submit"
             className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-colors duration-150 hover:bg-primary/90 sm:col-span-2 lg:col-span-3 lg:w-fit"
@@ -112,14 +130,28 @@ export default async function InvestmentsPage() {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-muted p-4">
           <div className="text-sm text-foreground/60">Total capital deployed</div>
-          <div className="mt-1 font-heading text-2xl font-semibold">
-            {totalInvested.toLocaleString()} (mixed currency)
+          <div className="mt-1 flex flex-col gap-1">
+            {[...investedByCurrency.entries()].map(([currency, amount]) => (
+              <div key={currency} className="font-heading text-2xl font-semibold">
+                {formatMoney(amount, currency)}
+              </div>
+            ))}
+            {investedByCurrency.size === 0 && (
+              <div className="font-heading text-2xl font-semibold">—</div>
+            )}
           </div>
         </div>
         <div className="rounded-lg border border-border bg-muted p-4">
           <div className="text-sm text-foreground/60">Total returned</div>
-          <div className="mt-1 font-heading text-2xl font-semibold text-accent">
-            {totalReturned.toLocaleString()} (mixed currency)
+          <div className="mt-1 flex flex-col gap-1">
+            {[...returnedByCurrency.entries()].map(([currency, amount]) => (
+              <div key={currency} className="font-heading text-2xl font-semibold text-accent">
+                {formatMoney(amount, currency)}
+              </div>
+            ))}
+            {returnedByCurrency.size === 0 && (
+              <div className="font-heading text-2xl font-semibold text-accent">—</div>
+            )}
           </div>
         </div>
       </section>
@@ -135,27 +167,46 @@ export default async function InvestmentsPage() {
                   {formatDate(inv.date)} • funded by {inv.account.name} • {inv.type ?? "unspecified type"}
                 </div>
                 {inv.notes && <div className="mt-1 text-sm text-foreground/60">{inv.notes}</div>}
+                {inv.document && (
+                  <a
+                    href={`/documents/${inv.document.id}`}
+                    className="mt-1 inline-block text-xs text-primary hover:underline"
+                  >
+                    📎 {inv.document.fileName} ({formatFileSize(inv.document.fileSize)})
+                  </a>
+                )}
               </div>
-              <form action={updateInvestmentStatus} className="flex items-center gap-2">
-                <input type="hidden" name="id" value={inv.id} />
-                <select
-                  name="status"
-                  defaultValue={inv.status}
-                  className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="submit"
-                  className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground/70 hover:bg-white/5"
-                >
-                  Update
-                </button>
-              </form>
+              <div className="flex items-center gap-3">
+                <form action={updateInvestmentStatus} className="flex items-center gap-2">
+                  <input type="hidden" name="id" value={inv.id} />
+                  <select
+                    name="status"
+                    defaultValue={inv.status}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground/70 hover:bg-white/5"
+                  >
+                    Update
+                  </button>
+                </form>
+                <form action={deleteInvestment}>
+                  <input type="hidden" name="id" value={inv.id} />
+                  <button
+                    type="submit"
+                    className="cursor-pointer text-xs text-foreground/50 hover:text-destructive"
+                  >
+                    Delete
+                  </button>
+                </form>
+              </div>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

@@ -1,6 +1,6 @@
 import { getAccounts, getStreams, getRecentTransactions } from "@/lib/data";
 import { createTransaction, deleteTransaction } from "@/lib/actions";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +102,15 @@ export default async function TransactionsPage() {
             />
           </label>
 
+          <label className="flex flex-col gap-1 text-sm sm:col-span-2 lg:col-span-3">
+            <span className="text-foreground/60">Attach document (optional)</span>
+            <input
+              type="file"
+              name="file"
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-on-primary"
+            />
+          </label>
+
           <button
             type="submit"
             className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-colors duration-150 hover:bg-primary/90 sm:col-span-2 lg:col-span-3 lg:w-fit"
@@ -122,6 +131,7 @@ export default async function TransactionsPage() {
                 <th className="py-2 pr-3 font-medium">Account</th>
                 <th className="py-2 pr-3 font-medium">Category</th>
                 <th className="py-2 pr-3 text-right font-medium">Amount</th>
+                <th className="py-2 pr-3 font-medium">Attachment</th>
                 <th className="py-2 pl-3" />
               </tr>
             </thead>
@@ -140,6 +150,19 @@ export default async function TransactionsPage() {
                     {t.type === "income" ? "+" : "-"}
                     {formatMoney(t.amount, t.currency)}
                   </td>
+                  <td className="py-2 pr-3 text-foreground/70">
+                    {t.document ? (
+                      <a
+                        href={`/documents/${t.document.id}`}
+                        className="text-primary hover:underline"
+                        title={`${t.document.fileName} (${formatFileSize(t.document.fileSize)})`}
+                      >
+                        📎 {t.document.fileName}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td className="py-2 pl-3 text-right">
                     <form action={deleteTransaction}>
                       <input type="hidden" name="id" value={t.id} />
@@ -155,7 +178,7 @@ export default async function TransactionsPage() {
               ))}
               {transactions.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-foreground/50">
+                  <td colSpan={7} className="py-6 text-center text-foreground/50">
                     No transactions yet.
                   </td>
                 </tr>

@@ -94,7 +94,7 @@ export async function getMonthlyTrend(monthsBack = 6) {
 
 export async function getInvestmentPortfolio() {
   const investments = await prisma.investment.findMany({
-    include: { returns: true, account: true },
+    include: { returns: true, account: true, document: true },
     orderBy: { date: "desc" },
   });
 
@@ -136,7 +136,7 @@ export async function getAccountInvestableBalances() {
 
 export async function getRecentTransactions(limit = 20) {
   return prisma.transaction.findMany({
-    include: { account: true, stream: true },
+    include: { account: true, stream: true, document: true },
     orderBy: { date: "desc" },
     take: limit,
   });
