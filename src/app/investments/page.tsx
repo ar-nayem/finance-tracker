@@ -114,6 +114,7 @@ export default async function InvestmentsPage() {
             <input
               type="file"
               name="file"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
               className="rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-on-primary"
             />
           </label>

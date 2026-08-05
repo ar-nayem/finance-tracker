@@ -28,11 +28,14 @@ export async function getAccountsWithUsageCounts() {
   const accounts = await getAccounts();
   return Promise.all(
     accounts.map(async (account) => {
-      const [transactionCount, investmentCount] = await Promise.all([
+      const [transactionCount, investmentCount, transferCount] = await Promise.all([
         prisma.transaction.count({ where: { accountId: account.id } }),
         prisma.investment.count({ where: { accountId: account.id } }),
+        prisma.transfer.count({
+          where: { OR: [{ fromAccountId: account.id }, { toAccountId: account.id }] },
+        }),
       ]);
-      return { account, transactionCount, investmentCount };
+      return { account, transactionCount, investmentCount, transferCount };
     })
   );
 }
@@ -108,30 +111,60 @@ export async function getInvestmentPortfolio() {
   });
 }
 
-// Available to invest from an account: its transaction balance, minus what's
-// already tied up in investments funded from it, plus returns paid back.
+// Available balance for an account: its transaction balance, minus what's
+// already tied up in investments funded from it, plus returns paid back,
+// plus/minus transfers in/out. This is the one place this formula lives —
+// both the dashboard/investment-picker (plural, below) and the single-account
+// gate used when funding an investment or a transfer (singular, further
+// below) go through it.
+function computeAvailableBalance(account: {
+  transactions: { type: string; amount: number }[];
+  investments: { amount: number; returns: { amount: number }[] }[];
+  transfersOut: { fromAmount: number }[];
+  transfersIn: { toAmount: number }[];
+}) {
+  const transactionBalance = account.transactions.reduce(
+    (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
+    0
+  );
+  const totalInvested = account.investments.reduce((sum, i) => sum + i.amount, 0);
+  const totalReturned = account.investments.reduce(
+    (sum, i) => sum + i.returns.reduce((s, r) => s + r.amount, 0),
+    0
+  );
+  const totalTransferredOut = account.transfersOut.reduce((sum, t) => sum + t.fromAmount, 0);
+  const totalTransferredIn = account.transfersIn.reduce((sum, t) => sum + t.toAmount, 0);
+  const available =
+    transactionBalance - totalInvested + totalReturned + totalTransferredIn - totalTransferredOut;
+  return { transactionBalance, totalInvested, totalReturned, available };
+}
+
 export async function getAccountInvestableBalances() {
   const accounts = await prisma.account.findMany({
     orderBy: { createdAt: "asc" },
     include: {
       transactions: true,
       investments: { include: { returns: true } },
+      transfersOut: true,
+      transfersIn: true,
     },
   });
 
-  return accounts.map((account) => {
-    const transactionBalance = account.transactions.reduce(
-      (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
-      0
-    );
-    const totalInvested = account.investments.reduce((sum, i) => sum + i.amount, 0);
-    const totalReturned = account.investments.reduce(
-      (sum, i) => sum + i.returns.reduce((s, r) => s + r.amount, 0),
-      0
-    );
-    const available = transactionBalance - totalInvested + totalReturned;
-    return { account, transactionBalance, totalInvested, totalReturned, available };
+  return accounts.map((account) => ({ account, ...computeAvailableBalance(account) }));
+}
+
+export async function getAccountInvestableBalance(accountId: string) {
+  const account = await prisma.account.findUniqueOrThrow({
+    where: { id: accountId },
+    include: {
+      transactions: true,
+      investments: { include: { returns: true } },
+      transfersOut: true,
+      transfersIn: true,
+    },
   });
+
+  return { account, ...computeAvailableBalance(account) };
 }
 
 export async function getRecentTransactions(limit = 20) {
@@ -140,4 +173,69 @@ export async function getRecentTransactions(limit = 20) {
     orderBy: { date: "desc" },
     take: limit,
   });
+}
+
+export async function getRecentTransfers(limit = 20) {
+  return prisma.transfer.findMany({
+    include: { fromAccount: true, toAccount: true },
+    orderBy: { date: "desc" },
+    take: limit,
+  });
+}
+
+export type StatementLine = {
+  date: Date;
+  description: string;
+  debit: number;
+  credit: number;
+};
+
+// Every real cash movement for an account, merged into one dated ledger:
+// transactions, transfers in/out, and investment funding/returns. Scoped to
+// match computeAvailableBalance() above so a downloaded statement's running
+// balance always reconciles with the "available" figure shown in the app.
+export async function getAccountStatementLines(accountId: string): Promise<StatementLine[]> {
+  const [transactions, transfersOut, transfersIn, investments, returns] = await Promise.all([
+    prisma.transaction.findMany({ where: { accountId }, include: { stream: true } }),
+    prisma.transfer.findMany({ where: { fromAccountId: accountId }, include: { toAccount: true } }),
+    prisma.transfer.findMany({ where: { toAccountId: accountId }, include: { fromAccount: true } }),
+    prisma.investment.findMany({ where: { accountId } }),
+    prisma.investmentReturn.findMany({ where: { investment: { accountId } }, include: { investment: true } }),
+  ]);
+
+  const lines: StatementLine[] = [
+    ...transactions.map((t) => ({
+      date: t.date,
+      description: `${t.category ?? t.stream.name}${t.note ? ` — ${t.note}` : ""}`,
+      debit: t.type === "expense" ? t.amount : 0,
+      credit: t.type === "income" ? t.amount : 0,
+    })),
+    ...transfersOut.map((tr) => ({
+      date: tr.date,
+      description: `Transfer to ${tr.toAccount.name}`,
+      debit: tr.fromAmount,
+      credit: 0,
+    })),
+    ...transfersIn.map((tr) => ({
+      date: tr.date,
+      description: `Transfer from ${tr.fromAccount.name}`,
+      debit: 0,
+      credit: tr.toAmount,
+    })),
+    ...investments.map((inv) => ({
+      date: inv.date,
+      description: `Investment: ${inv.name}`,
+      debit: inv.amount,
+      credit: 0,
+    })),
+    ...returns.map((r) => ({
+      date: r.date,
+      description: `Return: ${r.investment.name}`,
+      debit: 0,
+      credit: r.amount,
+    })),
+  ];
+
+  lines.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return lines;
 }

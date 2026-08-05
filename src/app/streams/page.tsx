@@ -152,8 +152,8 @@ export default async function StreamsPage() {
         </form>
 
         <ul className="mt-4 flex flex-col gap-2">
-          {accounts.map(({ account, transactionCount, investmentCount }) => {
-            const usageCount = transactionCount + investmentCount;
+          {accounts.map(({ account, transactionCount, investmentCount, transferCount }) => {
+            const usageCount = transactionCount + investmentCount + transferCount;
             return (
               <li
                 key={account.id}
@@ -171,7 +171,8 @@ export default async function StreamsPage() {
                 {usageCount > 0 ? (
                   <span className="text-xs text-foreground/40">
                     {transactionCount} transaction{transactionCount === 1 ? "" : "s"}, {investmentCount}{" "}
-                    investment{investmentCount === 1 ? "" : "s"} — remove those first
+                    investment{investmentCount === 1 ? "" : "s"}, {transferCount} transfer
+                    {transferCount === 1 ? "" : "s"} — remove those first
                   </span>
                 ) : (
                   <form action={deleteAccount}>

@@ -1,14 +1,23 @@
-import { getAccounts, getStreams, getRecentTransactions } from "@/lib/data";
-import { createTransaction, deleteTransaction } from "@/lib/actions";
+import {
+  getAccounts,
+  getStreams,
+  getRecentTransactions,
+  getRecentTransfers,
+  getLatestRmbToBdtRate,
+} from "@/lib/data";
+import { createTransaction, deleteTransaction, deleteTransfer } from "@/lib/actions";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
+import { TransferForm } from "@/components/transfer-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function TransactionsPage() {
-  const [accounts, streams, transactions] = await Promise.all([
+  const [accounts, streams, transactions, transfers, rate] = await Promise.all([
     getAccounts(),
     getStreams(),
     getRecentTransactions(50),
+    getRecentTransfers(20),
+    getLatestRmbToBdtRate(),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -107,6 +116,7 @@ export default async function TransactionsPage() {
             <input
               type="file"
               name="file"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
               className="rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-on-primary"
             />
           </label>
@@ -118,6 +128,52 @@ export default async function TransactionsPage() {
             Add transaction
           </button>
         </form>
+      </section>
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">Transfer Between Accounts</h2>
+        <p className="mt-1 text-sm text-foreground/60">Move money from one of your accounts to another.</p>
+        {accounts.length >= 2 ? (
+          <TransferForm accounts={accounts} today={today} suggestedRate={rate} />
+        ) : (
+          <p className="mt-4 text-sm text-foreground/50">Add at least two accounts to transfer money.</p>
+        )}
+
+        {transfers.length > 0 && (
+          <ul className="mt-4 flex flex-col gap-2">
+            {transfers.map((tr) => (
+              <li
+                key={tr.id}
+                className="flex items-center justify-between rounded-md border border-border/50 px-3 py-2 text-sm"
+              >
+                <div>
+                  <span className="font-medium">{tr.fromAccount.name}</span>
+                  <span className="mx-2 text-foreground/40">→</span>
+                  <span className="font-medium">{tr.toAccount.name}</span>
+                  <span className="ml-2 text-xs text-foreground/50">{formatDate(tr.date)}</span>
+                  {tr.note && <span className="ml-2 text-xs text-foreground/50">— {tr.note}</span>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-foreground/70">
+                    {formatMoney(tr.fromAmount, tr.fromCurrency)}
+                    {tr.fromCurrency !== tr.toCurrency && (
+                      <span className="text-foreground/50"> → {formatMoney(tr.toAmount, tr.toCurrency)}</span>
+                    )}
+                  </span>
+                  <form action={deleteTransfer}>
+                    <input type="hidden" name="id" value={tr.id} />
+                    <button
+                      type="submit"
+                      className="cursor-pointer text-xs text-foreground/40 hover:text-destructive"
+                    >
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="rounded-lg border border-border bg-muted p-4">
@@ -163,16 +219,26 @@ export default async function TransactionsPage() {
                       "-"
                     )}
                   </td>
-                  <td className="py-2 pl-3 text-right">
-                    <form action={deleteTransaction}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <button
-                        type="submit"
-                        className="cursor-pointer text-xs text-foreground/40 hover:text-destructive"
+                  <td className="py-2 pl-3">
+                    <div className="flex items-center justify-end gap-3">
+                      <a
+                        href={`/transactions/${t.id}/invoice`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline"
                       >
-                        Delete
-                      </button>
-                    </form>
+                        Invoice
+                      </a>
+                      <form action={deleteTransaction}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <button
+                          type="submit"
+                          className="cursor-pointer text-xs text-foreground/40 hover:text-destructive"
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -186,6 +252,26 @@ export default async function TransactionsPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">Account Statements</h2>
+        <p className="mt-1 text-sm text-foreground/60">
+          Download the full transaction/transfer/investment history for an account as CSV.
+        </p>
+        <ul className="mt-3 flex flex-col gap-2">
+          {accounts.map((a) => (
+            <li key={a.id} className="flex items-center justify-between text-sm">
+              <span>
+                {a.name} <span className="text-xs text-foreground/50">({a.currency})</span>
+              </span>
+              <a href={`/accounts/${a.id}/statement`} className="text-primary hover:underline">
+                Download statement
+              </a>
+            </li>
+          ))}
+          {accounts.length === 0 && <p className="text-sm text-foreground/50">No accounts yet.</p>}
+        </ul>
       </section>
     </div>
   );

@@ -30,6 +30,8 @@ model Account {
   createdAt    DateTime      @default(now())
   transactions Transaction[]
   investments  Investment[]
+  transfersOut Transfer[]    @relation("AccountTransfersOut")
+  transfersIn  Transfer[]    @relation("AccountTransfersIn")
 }
 
 // type: "income" | "expense"
@@ -70,6 +72,25 @@ model Investment {
   documentId String?            @unique
   document   Document?          @relation(fields: [documentId], references: [id])
   createdAt  DateTime           @default(now())
+}
+
+// Money moved between two of your own accounts. Not tied to a Stream — a
+// transfer isn't income/expense against any income source. Amounts are
+// denormalized (fromAmount/fromCurrency, toAmount/toCurrency) the same way
+// Transaction/Investment already denormalize currency.
+model Transfer {
+  id            String   @id @default(cuid())
+  date          DateTime
+  fromAccountId String
+  fromAccount   Account  @relation("AccountTransfersOut", fields: [fromAccountId], references: [id])
+  fromAmount    Float
+  fromCurrency  String
+  toAccountId   String
+  toAccount     Account  @relation("AccountTransfersIn", fields: [toAccountId], references: [id])
+  toAmount      Float
+  toCurrency    String
+  note          String?
+  createdAt     DateTime @default(now())
 }
 
 model InvestmentReturn {

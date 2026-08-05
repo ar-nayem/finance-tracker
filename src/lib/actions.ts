@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createSession, deleteSession, verifySession } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
+import { getAccountInvestableBalance } from "@/lib/data";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -121,6 +122,7 @@ export async function createTransaction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/transactions");
+  revalidatePath("/investments");
   redirect("/transactions");
 }
 
@@ -137,23 +139,61 @@ export async function deleteTransaction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/transactions");
+  revalidatePath("/investments");
 }
 
-async function getAccountInvestableBalance(accountId: string) {
-  const account = await prisma.account.findUniqueOrThrow({
-    where: { id: accountId },
-    include: { transactions: true, investments: { include: { returns: true } } },
+export async function createTransfer(formData: FormData) {
+  await verifySession();
+  const fromAccountId = String(formData.get("fromAccountId") ?? "");
+  const toAccountId = String(formData.get("toAccountId") ?? "");
+  const dateRaw = String(formData.get("date") ?? "");
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const fromAmount = parseAmount(formData.get("fromAmount"));
+
+  if (!fromAccountId || !toAccountId) throw new Error("Both accounts are required");
+  if (fromAccountId === toAccountId) throw new Error("Can't transfer an account to itself");
+
+  const { account: fromAccount, available } = await getAccountInvestableBalance(fromAccountId);
+  const toAccount = await prisma.account.findUniqueOrThrow({ where: { id: toAccountId } });
+
+  const toAmount =
+    fromAccount.currency === toAccount.currency ? fromAmount : parseAmount(formData.get("toAmount"));
+
+  if (fromAmount > available) {
+    throw new Error(
+      `Not enough in ${fromAccount.name}: available ${available.toFixed(2)} ${fromAccount.currency}, tried to transfer ${fromAmount.toFixed(2)}.`
+    );
+  }
+
+  await prisma.transfer.create({
+    data: {
+      date: dateRaw ? new Date(dateRaw) : new Date(),
+      fromAccountId,
+      fromAmount,
+      fromCurrency: fromAccount.currency,
+      toAccountId,
+      toAmount,
+      toCurrency: toAccount.currency,
+      note,
+    },
   });
-  const transactionBalance = account.transactions.reduce(
-    (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
-    0
-  );
-  const totalInvested = account.investments.reduce((sum, i) => sum + i.amount, 0);
-  const totalReturned = account.investments.reduce(
-    (sum, i) => sum + i.returns.reduce((s, r) => s + r.amount, 0),
-    0
-  );
-  return { account, available: transactionBalance - totalInvested + totalReturned };
+
+  revalidatePath("/");
+  revalidatePath("/transactions");
+  revalidatePath("/investments");
+  redirect("/transactions");
+}
+
+export async function deleteTransfer(formData: FormData) {
+  await verifySession();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing transfer id");
+
+  await prisma.transfer.delete({ where: { id } });
+
+  revalidatePath("/");
+  revalidatePath("/transactions");
+  revalidatePath("/investments");
 }
 
 export async function createInvestment(formData: FormData) {
@@ -333,13 +373,14 @@ export async function deleteAccount(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing account id");
 
-  const [transactionCount, investmentCount] = await Promise.all([
+  const [transactionCount, investmentCount, transferCount] = await Promise.all([
     prisma.transaction.count({ where: { accountId: id } }),
     prisma.investment.count({ where: { accountId: id } }),
+    prisma.transfer.count({ where: { OR: [{ fromAccountId: id }, { toAccountId: id }] } }),
   ]);
-  if (transactionCount > 0 || investmentCount > 0) {
+  if (transactionCount > 0 || investmentCount > 0 || transferCount > 0) {
     throw new Error(
-      `Can't delete: ${transactionCount} transaction(s) and ${investmentCount} investment(s) still use this account. Delete or reassign them first.`
+      `Can't delete: ${transactionCount} transaction(s), ${investmentCount} investment(s), and ${transferCount} transfer(s) still use this account. Delete or reassign them first.`
     );
   }
 
