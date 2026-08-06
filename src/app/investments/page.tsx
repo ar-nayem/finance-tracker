@@ -1,4 +1,9 @@
-import { getAccountInvestableBalances, getInvestmentPortfolio, getInvestmentAllocation } from "@/lib/data";
+import {
+  getAccountInvestableBalances,
+  getInvestmentPortfolio,
+  getInvestmentAllocation,
+  getLatestRmbToBdtRate,
+} from "@/lib/data";
 import {
   createInvestment,
   createInvestmentReturn,
@@ -7,6 +12,7 @@ import {
 } from "@/lib/actions";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { PieChartCard } from "@/components/pie-chart-card";
+import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +20,11 @@ const STATUS_OPTIONS = ["active", "exited", "lost"] as const;
 const TYPE_OPTIONS = ["Equity", "Loan", "Profit-share", "Other"] as const;
 
 export default async function InvestmentsPage() {
-  const [accountBalances, investments, allocation] = await Promise.all([
+  const [accountBalances, investments, allocation, rate] = await Promise.all([
     getAccountInvestableBalances(),
     getInvestmentPortfolio(),
     getInvestmentAllocation(),
+    getLatestRmbToBdtRate(),
   ]);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -30,6 +37,7 @@ export default async function InvestmentsPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <ExchangeRateBanner rate={rate} />
       <section className="rounded-lg border border-border bg-muted p-4">
         <h1 className="font-heading text-lg font-semibold">Add Investment or Loan</h1>
         <p className="text-sm text-foreground/60">

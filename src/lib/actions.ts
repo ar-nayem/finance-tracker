@@ -297,6 +297,8 @@ export async function setExchangeRate(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/transactions");
+  revalidatePath("/investments");
 }
 
 export async function updateInvestmentStatus(formData: FormData) {

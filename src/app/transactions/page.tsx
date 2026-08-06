@@ -8,6 +8,7 @@ import {
 import { createTransaction, deleteTransaction, deleteTransfer } from "@/lib/actions";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { TransferForm } from "@/components/transfer-form";
+import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ export default async function TransactionsPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <ExchangeRateBanner rate={rate} />
+
       <section className="rounded-lg border border-border bg-muted p-4">
         <h1 className="font-heading text-lg font-semibold">Add Transaction</h1>
         <form action={createTransaction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
