@@ -1,4 +1,4 @@
-import { getAccountInvestableBalances, getInvestmentPortfolio } from "@/lib/data";
+import { getAccountInvestableBalances, getInvestmentPortfolio, getInvestmentAllocation } from "@/lib/data";
 import {
   createInvestment,
   createInvestmentReturn,
@@ -6,6 +6,7 @@ import {
   updateInvestmentStatus,
 } from "@/lib/actions";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
+import { PieChartCard } from "@/components/pie-chart-card";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,10 @@ const STATUS_OPTIONS = ["active", "exited", "lost"] as const;
 const TYPE_OPTIONS = ["Equity", "Loan", "Profit-share", "Other"] as const;
 
 export default async function InvestmentsPage() {
-  const [accountBalances, investments] = await Promise.all([
+  const [accountBalances, investments, allocation] = await Promise.all([
     getAccountInvestableBalances(),
     getInvestmentPortfolio(),
+    getInvestmentAllocation(),
   ]);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -156,6 +158,18 @@ export default async function InvestmentsPage() {
           </div>
         </div>
       </section>
+
+      {allocation.length > 0 && (
+        <section>
+          <h2 className="font-heading text-lg font-semibold">Portfolio Allocation</h2>
+          <p className="mt-1 text-sm text-foreground/60">Capital deployed by investment type.</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {allocation.map(({ currency, data }) => (
+              <PieChartCard key={currency} title="Portfolio Allocation" data={data} currency={currency} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="flex flex-col gap-4">
         <h2 className="font-heading text-lg font-semibold">All Investments &amp; Loans</h2>

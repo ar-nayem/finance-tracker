@@ -24,7 +24,7 @@ export function TrendChart({
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-        <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" fontSize={12} />
+        <XAxis dataKey="label" stroke="rgba(255,255,255,0.5)" fontSize={12} />
         <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
         <Tooltip
           contentStyle={{

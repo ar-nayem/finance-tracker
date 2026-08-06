@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatDate, formatMoney } from "@/lib/format";
+import type { StatementLine } from "@/lib/data";
 
 type InvoiceTransaction = {
   id: string;
@@ -79,6 +80,138 @@ export async function buildTransactionInvoicePdf(transaction: InvoiceTransaction
 
   const footer = `System-generated receipt · ${new Date().toISOString()}`;
   page.drawText(footer, { x: 56, y: 48, size: 8, font, color: MUTED });
+
+  return doc.save();
+}
+
+const PAGE_SIZE: [number, number] = [595.28, 841.89];
+const MARGIN = 56;
+const ROW_HEIGHT = 20;
+
+type StatementColumn = { label: string; x: number; width: number; align?: "right" };
+
+// Widths sized to end at PAGE_SIZE[0] - MARGIN (539.28pt) — the same right
+// boundary every other element on the page respects.
+const STATEMENT_COLUMNS: StatementColumn[] = [
+  { label: "Date", x: MARGIN, width: 60 },
+  { label: "Description", x: MARGIN + 68, width: 195 },
+  { label: "Debit", x: MARGIN + 271, width: 65, align: "right" },
+  { label: "Credit", x: MARGIN + 344, width: 65, align: "right" },
+  { label: "Balance", x: MARGIN + 417, width: 65, align: "right" },
+];
+
+export async function buildAccountStatementPdf(
+  account: { name: string; currency: string },
+  lines: StatementLine[],
+  range: { from?: Date; to?: Date }
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  let page = doc.addPage(PAGE_SIZE);
+  let { width, height } = page.getSize();
+  let y = height - MARGIN;
+
+  const drawColumnHeaders = () => {
+    for (const col of STATEMENT_COLUMNS) {
+      const textWidth = bold.widthOfTextAtSize(col.label, 9);
+      const x = col.align === "right" ? col.x + col.width - textWidth : col.x;
+      page.drawText(col.label, { x, y, size: 9, font: bold, color: MUTED });
+    }
+    y -= 8;
+    page.drawLine({ start: { x: MARGIN, y }, end: { x: width - MARGIN, y }, thickness: 0.5, color: rgb(0.85, 0.85, 0.87) });
+    y -= ROW_HEIGHT;
+  };
+
+  const newPage = () => {
+    page = doc.addPage(PAGE_SIZE);
+    ({ width, height } = page.getSize());
+    y = height - MARGIN;
+    drawColumnHeaders();
+  };
+
+  const descriptionColumnWidth = STATEMENT_COLUMNS[1].width;
+  const truncateToWidth = (text: string, maxWidth: number) => {
+    if (font.widthOfTextAtSize(text, 9) <= maxWidth) return text;
+    let truncated = text;
+    while (truncated.length > 1 && font.widthOfTextAtSize(truncated + "…", 9) > maxWidth) {
+      truncated = truncated.slice(0, -1);
+    }
+    return truncated + "…";
+  };
+
+  page.drawText("Finance Tracker", { x: MARGIN, y, size: 20, font: bold, color: ACCENT });
+  y -= 22;
+  page.drawText(`Account Statement — ${account.name}`, { x: MARGIN, y, size: 13, font, color: MUTED });
+
+  const rangeText = `${range.from ? formatDate(range.from) : "Account opening"} to ${range.to ? formatDate(range.to) : "today"}`;
+  page.drawText(rangeText, {
+    x: width - MARGIN - font.widthOfTextAtSize(rangeText, 10),
+    y: height - MARGIN,
+    size: 10,
+    font,
+    color: MUTED,
+  });
+  const issued = `Issued ${formatDate(new Date())}`;
+  page.drawText(issued, {
+    x: width - MARGIN - font.widthOfTextAtSize(issued, 10),
+    y: height - MARGIN - 16,
+    size: 10,
+    font,
+    color: MUTED,
+  });
+
+  y -= 30;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: width - MARGIN, y }, thickness: 1, color: rgb(0.85, 0.85, 0.87) });
+  y -= 26;
+  drawColumnHeaders();
+
+  let balance = 0;
+  for (const line of lines) {
+    if (y < MARGIN + 60) newPage();
+    balance += line.credit - line.debit;
+
+    const cells = [
+      line.date.toISOString().slice(0, 10),
+      truncateToWidth(line.description, descriptionColumnWidth),
+      line.debit ? formatMoney(line.debit, account.currency) : "",
+      line.credit ? formatMoney(line.credit, account.currency) : "",
+      formatMoney(balance, account.currency),
+    ];
+
+    STATEMENT_COLUMNS.forEach((col, i) => {
+      const text = cells[i];
+      const textWidth = font.widthOfTextAtSize(text, 9);
+      const x = col.align === "right" ? col.x + col.width - textWidth : col.x;
+      page.drawText(text, { x, y, size: 9, font, color: INK });
+    });
+    y -= ROW_HEIGHT;
+  }
+
+  if (lines.length === 0) {
+    page.drawText("No activity in this period.", { x: MARGIN, y, size: 10, font, color: MUTED });
+    y -= ROW_HEIGHT;
+  }
+
+  if (y < MARGIN + 60) newPage();
+
+  y -= 10;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: width - MARGIN, y }, thickness: 1, color: rgb(0.85, 0.85, 0.87) });
+  y -= 24;
+
+  page.drawText("Closing balance", { x: MARGIN, y, size: 11, font, color: MUTED });
+  const closingValue = formatMoney(balance, account.currency);
+  page.drawText(closingValue, {
+    x: width - MARGIN - bold.widthOfTextAtSize(closingValue, 14),
+    y: y - 2,
+    size: 14,
+    font: bold,
+    color: balance >= 0 ? GOOD : BAD,
+  });
+
+  const footer = `System-generated statement · ${new Date().toISOString()}`;
+  page.drawText(footer, { x: MARGIN, y: 32, size: 8, font, color: MUTED });
 
   return doc.save();
 }

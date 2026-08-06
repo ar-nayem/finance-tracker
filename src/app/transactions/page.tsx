@@ -257,17 +257,45 @@ export default async function TransactionsPage() {
       <section className="rounded-lg border border-border bg-muted p-4">
         <h2 className="font-heading text-lg font-semibold">Account Statements</h2>
         <p className="mt-1 text-sm text-foreground/60">
-          Download the full transaction/transfer/investment history for an account as CSV.
+          Pick a date range (or leave blank for full history) and download as CSV or PDF.
         </p>
-        <ul className="mt-3 flex flex-col gap-2">
+        <ul className="mt-3 flex flex-col gap-3">
           {accounts.map((a) => (
-            <li key={a.id} className="flex items-center justify-between text-sm">
-              <span>
-                {a.name} <span className="text-xs text-foreground/50">({a.currency})</span>
-              </span>
-              <a href={`/accounts/${a.id}/statement`} className="text-primary hover:underline">
-                Download statement
-              </a>
+            <li key={a.id}>
+              <form className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  {a.name} <span className="text-xs text-foreground/50">({a.currency})</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    name="from"
+                    aria-label="From date"
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <span className="text-xs text-foreground/40">to</span>
+                  <input
+                    type="date"
+                    name="to"
+                    aria-label="To date"
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    formAction={`/accounts/${a.id}/statement`}
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-white/5"
+                  >
+                    CSV
+                  </button>
+                  <button
+                    type="submit"
+                    formAction={`/accounts/${a.id}/statement/pdf`}
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-white/5"
+                  >
+                    PDF
+                  </button>
+                </div>
+              </form>
             </li>
           ))}
           {accounts.length === 0 && <p className="text-sm text-foreground/50">No accounts yet.</p>}

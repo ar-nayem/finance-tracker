@@ -1,5 +1,58 @@
 import { prisma } from "@/lib/prisma";
-import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import {
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subDays,
+  subWeeks,
+  subMonths,
+  eachDayOfInterval,
+  eachWeekOfInterval,
+  eachMonthOfInterval,
+  format,
+} from "date-fns";
+
+export type Period = "1w" | "1m" | "3m" | "6m" | "1y" | "2y";
+
+export const PERIOD_LABELS: Record<Period, string> = {
+  "1w": "Past Week",
+  "1m": "Past Month",
+  "3m": "Past 3 Months",
+  "6m": "Past 6 Months",
+  "1y": "Past Year",
+  "2y": "Past 2 Years",
+};
+
+export function normalizePeriod(value: string | string[] | undefined): Period {
+  const v = Array.isArray(value) ? value[0] : value;
+  return v !== undefined && v in PERIOD_LABELS ? (v as Period) : "1m";
+}
+
+type Bucket = "day" | "week" | "month";
+
+// Bucket granularity scales with range length so the trend chart stays
+// readable — daily points for short windows, weekly for a quarter, monthly
+// once we're into multi-month territory.
+function periodConfig(period: Period): { start: Date; end: Date; bucket: Bucket } {
+  const end = endOfDay(new Date());
+  switch (period) {
+    case "1w":
+      return { start: startOfDay(subDays(end, 6)), end, bucket: "day" };
+    case "1m":
+      return { start: startOfDay(subDays(end, 29)), end, bucket: "day" };
+    case "3m":
+      return { start: startOfDay(subWeeks(end, 12)), end, bucket: "week" };
+    case "6m":
+      return { start: startOfMonth(subMonths(end, 5)), end, bucket: "month" };
+    case "1y":
+      return { start: startOfMonth(subMonths(end, 11)), end, bucket: "month" };
+    case "2y":
+      return { start: startOfMonth(subMonths(end, 23)), end, bucket: "month" };
+  }
+}
 
 export async function getStreams() {
   return prisma.stream.findMany({ orderBy: { createdAt: "asc" } });
@@ -48,16 +101,14 @@ export async function getLatestRmbToBdtRate() {
   return rate?.rate ?? null;
 }
 
-export async function getStreamSummaries() {
+export async function getStreamSummariesForPeriod(period: Period) {
   const streams = await getStreams();
-  const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
+  const { start, end } = periodConfig(period);
 
   const summaries = await Promise.all(
     streams.map(async (stream) => {
       const transactions = await prisma.transaction.findMany({
-        where: { streamId: stream.id, date: { gte: monthStart, lte: monthEnd } },
+        where: { streamId: stream.id, date: { gte: start, lte: end } },
       });
       const income = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
       const expense = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
@@ -68,20 +119,36 @@ export async function getStreamSummaries() {
   return summaries;
 }
 
-export async function getMonthlyTrend(monthsBack = 6) {
+export async function getTrend(period: Period) {
   const streams = await getStreams();
-  const now = new Date();
-  const months = Array.from({ length: monthsBack }, (_, i) => subMonths(now, monthsBack - 1 - i));
+  const { start, end, bucket } = periodConfig(period);
+
+  const buckets =
+    bucket === "day"
+      ? eachDayOfInterval({ start, end }).map((d) => ({
+          start: startOfDay(d),
+          end: endOfDay(d),
+          label: format(d, "MMM d"),
+        }))
+      : bucket === "week"
+        ? eachWeekOfInterval({ start, end }).map((d) => ({
+            start: startOfWeek(d),
+            end: endOfWeek(d),
+            label: format(d, "MMM d"),
+          }))
+        : eachMonthOfInterval({ start, end }).map((d) => ({
+            start: startOfMonth(d),
+            end: endOfMonth(d),
+            label: format(d, period === "2y" ? "MMM ''yy" : "MMM"),
+          }));
 
   const trend = await Promise.all(
-    months.map(async (monthDate) => {
-      const monthStart = startOfMonth(monthDate);
-      const monthEnd = endOfMonth(monthDate);
-      const row: Record<string, string | number> = { month: format(monthDate, "MMM") };
+    buckets.map(async (b) => {
+      const row: Record<string, string | number> = { label: b.label };
 
       for (const stream of streams) {
         const transactions = await prisma.transaction.findMany({
-          where: { streamId: stream.id, date: { gte: monthStart, lte: monthEnd } },
+          where: { streamId: stream.id, date: { gte: b.start, lte: b.end } },
         });
         const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
         const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -93,6 +160,51 @@ export async function getMonthlyTrend(monthsBack = 6) {
   );
 
   return { trend, streamNames: streams.map((s) => s.name) };
+}
+
+// Expense totals by category, split per currency (mixing currencies in one
+// pie would misrepresent the split), for the "Spending by Category" chart.
+export async function getCategoryBreakdown(period: Period) {
+  const { start, end } = periodConfig(period);
+  const transactions = await prisma.transaction.findMany({
+    where: { type: "expense", date: { gte: start, lte: end } },
+  });
+
+  const byCurrency = new Map<string, Map<string, number>>();
+  for (const t of transactions) {
+    const categoryTotals = byCurrency.get(t.currency) ?? new Map<string, number>();
+    const key = t.category ?? "Uncategorized";
+    categoryTotals.set(key, (categoryTotals.get(key) ?? 0) + t.amount);
+    byCurrency.set(t.currency, categoryTotals);
+  }
+
+  return [...byCurrency.entries()].map(([currency, totals]) => ({
+    currency,
+    data: [...totals.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value),
+  }));
+}
+
+// Capital deployed by investment type, split per currency, for the
+// investments page's "Portfolio Allocation" chart.
+export async function getInvestmentAllocation() {
+  const investments = await prisma.investment.findMany();
+
+  const byCurrency = new Map<string, Map<string, number>>();
+  for (const inv of investments) {
+    const typeTotals = byCurrency.get(inv.currency) ?? new Map<string, number>();
+    const key = inv.type ?? "Unspecified";
+    typeTotals.set(key, (typeTotals.get(key) ?? 0) + inv.amount);
+    byCurrency.set(inv.currency, typeTotals);
+  }
+
+  return [...byCurrency.entries()].map(([currency, totals]) => ({
+    currency,
+    data: [...totals.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value),
+  }));
 }
 
 export async function getInvestmentPortfolio() {
@@ -190,17 +302,39 @@ export type StatementLine = {
   credit: number;
 };
 
+export type DateRange = { from?: Date; to?: Date };
+
 // Every real cash movement for an account, merged into one dated ledger:
 // transactions, transfers in/out, and investment funding/returns. Scoped to
 // match computeAvailableBalance() above so a downloaded statement's running
 // balance always reconciles with the "available" figure shown in the app.
-export async function getAccountStatementLines(accountId: string): Promise<StatementLine[]> {
+// An optional date range filters which lines are included — but the running
+// balance is only meaningful as "change over the range" in that case, not a
+// true account balance, since anything before `from` is excluded.
+export async function getAccountStatementLines(
+  accountId: string,
+  range?: DateRange
+): Promise<StatementLine[]> {
+  const dateFilter =
+    range?.from || range?.to
+      ? { date: { ...(range.from ? { gte: range.from } : {}), ...(range.to ? { lte: range.to } : {}) } }
+      : {};
+
   const [transactions, transfersOut, transfersIn, investments, returns] = await Promise.all([
-    prisma.transaction.findMany({ where: { accountId }, include: { stream: true } }),
-    prisma.transfer.findMany({ where: { fromAccountId: accountId }, include: { toAccount: true } }),
-    prisma.transfer.findMany({ where: { toAccountId: accountId }, include: { fromAccount: true } }),
-    prisma.investment.findMany({ where: { accountId } }),
-    prisma.investmentReturn.findMany({ where: { investment: { accountId } }, include: { investment: true } }),
+    prisma.transaction.findMany({ where: { accountId, ...dateFilter }, include: { stream: true } }),
+    prisma.transfer.findMany({
+      where: { fromAccountId: accountId, ...dateFilter },
+      include: { toAccount: true },
+    }),
+    prisma.transfer.findMany({
+      where: { toAccountId: accountId, ...dateFilter },
+      include: { fromAccount: true },
+    }),
+    prisma.investment.findMany({ where: { accountId, ...dateFilter } }),
+    prisma.investmentReturn.findMany({
+      where: { investment: { accountId }, ...dateFilter },
+      include: { investment: true },
+    }),
   ]);
 
   const lines: StatementLine[] = [

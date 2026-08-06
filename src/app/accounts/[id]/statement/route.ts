@@ -7,14 +7,20 @@ function csvField(value: string): string {
   return value;
 }
 
-export async function GET(_req: Request, ctx: RouteContext<"/accounts/[id]/statement">) {
+export async function GET(req: Request, ctx: RouteContext<"/accounts/[id]/statement">) {
   await verifySession();
   const { id } = await ctx.params;
 
   const account = await prisma.account.findUnique({ where: { id } });
   if (!account) return new Response("Not found", { status: 404 });
 
-  const lines = await getAccountStatementLines(id);
+  const { searchParams } = new URL(req.url);
+  const fromRaw = searchParams.get("from");
+  const toRaw = searchParams.get("to");
+  const from = fromRaw ? new Date(fromRaw) : undefined;
+  const to = toRaw ? new Date(toRaw) : undefined;
+
+  const lines = await getAccountStatementLines(id, { from, to });
 
   let balance = 0;
   const rows = lines.map((line) => {
@@ -30,11 +36,12 @@ export async function GET(_req: Request, ctx: RouteContext<"/accounts/[id]/state
   });
 
   const csv = ["Date,Description,Debit,Credit,Balance,Currency", ...rows].join("\n") + "\n";
+  const suffix = fromRaw || toRaw ? `-${fromRaw ?? "start"}_to_${toRaw ?? "now"}` : "";
 
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${account.name.replace(/"/g, "")}-statement.csv"`,
+      "Content-Disposition": `attachment; filename="${account.name.replace(/"/g, "")}-statement${suffix}.csv"`,
     },
   });
 }

@@ -1,13 +1,19 @@
+import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import {
-  getStreamSummaries,
-  getMonthlyTrend,
+  getStreamSummariesForPeriod,
+  getTrend,
+  getCategoryBreakdown,
   getAccountInvestableBalances,
   getLatestRmbToBdtRate,
   getInvestmentPortfolio,
+  normalizePeriod,
+  PERIOD_LABELS,
+  type Period,
 } from "@/lib/data";
 import { setExchangeRate } from "@/lib/actions";
 import { TrendChart } from "@/components/trend-chart";
+import { PieChartCard } from "@/components/pie-chart-card";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +22,13 @@ export const dynamic = "force-dynamic";
 const JOB_STREAMS = new Set(["Job 1", "Job 2"]);
 const TAX_RESERVE_RATE = 0.25;
 
-export default async function DashboardPage() {
-  const [summaries, { trend, streamNames }, balances, rate, investments] = await Promise.all([
-    getStreamSummaries(),
-    getMonthlyTrend(),
+export default async function DashboardPage(props: PageProps<"/">) {
+  const period = normalizePeriod((await props.searchParams).period);
+
+  const [summaries, { trend, streamNames }, categoryBreakdown, balances, rate, investments] = await Promise.all([
+    getStreamSummariesForPeriod(period),
+    getTrend(period),
+    getCategoryBreakdown(period),
     getAccountInvestableBalances(),
     getLatestRmbToBdtRate(),
     getInvestmentPortfolio(),
@@ -43,10 +52,27 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <section>
-        <h1 className="font-heading text-2xl font-semibold">This Month</h1>
-        <p className="mt-1 text-sm text-foreground/60">
-          Net (income − expense) per income stream, current calendar month.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="font-heading text-2xl font-semibold">{PERIOD_LABELS[period]}</h1>
+            <p className="mt-1 text-sm text-foreground/60">Net (income − expense) per income stream.</p>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <Link
+                key={p}
+                href={`/?period=${p}`}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                  p === period
+                    ? "bg-primary text-on-primary"
+                    : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
+                }`}
+              >
+                {p.toUpperCase()}
+              </Link>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {summaries.map(({ stream, income, expense, net }) => (
@@ -80,7 +106,7 @@ export default async function DashboardPage() {
       <section className="rounded-lg border border-border bg-muted p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-lg font-semibold">Combined Total (this month)</h2>
+            <h2 className="font-heading text-lg font-semibold">Combined Total ({PERIOD_LABELS[period]})</h2>
             <p className="text-sm text-foreground/60">Converted to BDT using latest RMB to BDT rate.</p>
           </div>
           <form action={setExchangeRate} className="flex items-center gap-2">
@@ -112,10 +138,23 @@ export default async function DashboardPage() {
       </section>
 
       <section className="rounded-lg border border-border bg-muted p-4">
-        <h2 className="font-heading text-lg font-semibold">6-Month Trend</h2>
+        <h2 className="font-heading text-lg font-semibold">{PERIOD_LABELS[period]} Trend</h2>
         <p className="text-sm text-foreground/60">Net per stream, native currency.</p>
         <div className="mt-4">
           <TrendChart data={trend} streamNames={streamNames} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-heading text-lg font-semibold">Spending by Category</h2>
+        <p className="mt-1 text-sm text-foreground/60">{PERIOD_LABELS[period]}, expenses only.</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {categoryBreakdown.map(({ currency, data }) => (
+            <PieChartCard key={currency} title="Spending by Category" data={data} currency={currency} />
+          ))}
+          {categoryBreakdown.length === 0 && (
+            <p className="text-sm text-foreground/50">No expenses in this period.</p>
+          )}
         </div>
       </section>
 
