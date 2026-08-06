@@ -7,7 +7,8 @@ import {
   getAccountInvestableBalances,
   getLatestRmbToBdtRate,
   getInvestmentPortfolio,
-  normalizePeriod,
+  resolveRangeSelection,
+  describeRange,
   PERIOD_LABELS,
   type Period,
 } from "@/lib/data";
@@ -23,12 +24,14 @@ const JOB_STREAMS = new Set(["Job 1", "Job 2"]);
 const TAX_RESERVE_RATE = 0.25;
 
 export default async function DashboardPage(props: PageProps<"/">) {
-  const period = normalizePeriod((await props.searchParams).period);
+  const searchParams = await props.searchParams;
+  const selection = resolveRangeSelection(searchParams);
+  const rangeLabel = describeRange(selection);
 
   const [summaries, { trend, streamNames }, categoryBreakdown, balances, rate, investments] = await Promise.all([
-    getStreamSummariesForPeriod(period),
-    getTrend(period),
-    getCategoryBreakdown(period),
+    getStreamSummariesForPeriod(selection),
+    getTrend(selection),
+    getCategoryBreakdown(selection),
     getAccountInvestableBalances(),
     getLatestRmbToBdtRate(),
     getInvestmentPortfolio(),
@@ -54,23 +57,54 @@ export default async function DashboardPage(props: PageProps<"/">) {
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-heading text-2xl font-semibold">{PERIOD_LABELS[period]}</h1>
+            <h1 className="font-heading text-2xl font-semibold">{rangeLabel}</h1>
             <p className="mt-1 text-sm text-foreground/60">Net (income − expense) per income stream.</p>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-              <Link
-                key={p}
-                href={`/?period=${p}`}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-                  p === period
-                    ? "bg-primary text-on-primary"
-                    : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
-                }`}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap gap-1">
+              {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+                <Link
+                  key={p}
+                  href={`/?period=${p}`}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                    selection.kind === "preset" && selection.period === p
+                      ? "bg-primary text-on-primary"
+                      : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
+                  }`}
+                >
+                  {p.toUpperCase()}
+                </Link>
+              ))}
+            </div>
+            <form
+              className={`flex items-center gap-1 rounded-md border px-2 py-1 ${
+                selection.kind === "custom" ? "border-primary" : "border-border"
+              }`}
+            >
+              <input
+                type="date"
+                name="from"
+                defaultValue={selection.kind === "custom" ? selection.from.toISOString().slice(0, 10) : undefined}
+                aria-label="From date"
+                required
+                className="rounded-md bg-background px-2 py-1 text-xs outline-none"
+              />
+              <span className="text-xs text-foreground/40">to</span>
+              <input
+                type="date"
+                name="to"
+                defaultValue={selection.kind === "custom" ? selection.to.toISOString().slice(0, 10) : undefined}
+                aria-label="To date"
+                required
+                className="rounded-md bg-background px-2 py-1 text-xs outline-none"
+              />
+              <button
+                type="submit"
+                className="cursor-pointer rounded-md bg-primary px-2 py-1 text-xs font-medium text-on-primary hover:bg-primary/90"
               >
-                {p.toUpperCase()}
-              </Link>
-            ))}
+                Apply
+              </button>
+            </form>
           </div>
         </div>
 
@@ -106,7 +140,7 @@ export default async function DashboardPage(props: PageProps<"/">) {
       <section className="rounded-lg border border-border bg-muted p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-lg font-semibold">Combined Total ({PERIOD_LABELS[period]})</h2>
+            <h2 className="font-heading text-lg font-semibold">Combined Total ({rangeLabel})</h2>
             <p className="text-sm text-foreground/60">Converted to BDT using latest RMB to BDT rate.</p>
           </div>
           <form action={setExchangeRate} className="flex items-center gap-2">
@@ -138,7 +172,7 @@ export default async function DashboardPage(props: PageProps<"/">) {
       </section>
 
       <section className="rounded-lg border border-border bg-muted p-4">
-        <h2 className="font-heading text-lg font-semibold">{PERIOD_LABELS[period]} Trend</h2>
+        <h2 className="font-heading text-lg font-semibold">{rangeLabel} Trend</h2>
         <p className="text-sm text-foreground/60">Net per stream, native currency.</p>
         <div className="mt-4">
           <TrendChart data={trend} streamNames={streamNames} />
@@ -147,7 +181,7 @@ export default async function DashboardPage(props: PageProps<"/">) {
 
       <section>
         <h2 className="font-heading text-lg font-semibold">Spending by Category</h2>
-        <p className="mt-1 text-sm text-foreground/60">{PERIOD_LABELS[period]}, expenses only.</p>
+        <p className="mt-1 text-sm text-foreground/60">{rangeLabel}, expenses only.</p>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           {categoryBreakdown.map(({ currency, data }) => (
             <PieChartCard key={currency} title="Spending by Category" data={data} currency={currency} />

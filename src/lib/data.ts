@@ -9,11 +9,13 @@ import {
   subDays,
   subWeeks,
   subMonths,
+  differenceInCalendarDays,
   eachDayOfInterval,
   eachWeekOfInterval,
   eachMonthOfInterval,
   format,
 } from "date-fns";
+import { formatDate } from "@/lib/format";
 
 export type Period = "1w" | "1m" | "3m" | "6m" | "1y" | "2y";
 
@@ -26,9 +28,40 @@ export const PERIOD_LABELS: Record<Period, string> = {
   "2y": "Past 2 Years",
 };
 
-export function normalizePeriod(value: string | string[] | undefined): Period {
-  const v = Array.isArray(value) ? value[0] : value;
-  return v !== undefined && v in PERIOD_LABELS ? (v as Period) : "1m";
+// A time window is either one of the fixed presets above, or a custom
+// from/to range the user picked themselves. Every dashboard query takes this
+// instead of a bare Period so "custom" isn't a bolted-on special case.
+export type RangeSelection = { kind: "preset"; period: Period } | { kind: "custom"; from: Date; to: Date };
+
+function firstOf(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+// Custom range wins whenever both `from` and `to` are present and valid;
+// otherwise falls back to the period preset (defaulting to "1m").
+export function resolveRangeSelection(searchParams: {
+  period?: string | string[];
+  from?: string | string[];
+  to?: string | string[];
+}): RangeSelection {
+  const fromRaw = firstOf(searchParams.from);
+  const toRaw = firstOf(searchParams.to);
+  if (fromRaw && toRaw) {
+    const from = startOfDay(new Date(fromRaw));
+    const to = endOfDay(new Date(toRaw));
+    if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && from <= to) {
+      return { kind: "custom", from, to };
+    }
+  }
+  const periodRaw = firstOf(searchParams.period);
+  const period = periodRaw !== undefined && periodRaw in PERIOD_LABELS ? (periodRaw as Period) : "1m";
+  return { kind: "preset", period };
+}
+
+export function describeRange(selection: RangeSelection): string {
+  return selection.kind === "preset"
+    ? PERIOD_LABELS[selection.period]
+    : `${formatDate(selection.from)} – ${formatDate(selection.to)}`;
 }
 
 type Bucket = "day" | "week" | "month";
@@ -52,6 +85,13 @@ function periodConfig(period: Period): { start: Date; end: Date; bucket: Bucket 
     case "2y":
       return { start: startOfMonth(subMonths(end, 23)), end, bucket: "month" };
   }
+}
+
+function rangeConfig(selection: RangeSelection): { start: Date; end: Date; bucket: Bucket } {
+  if (selection.kind === "preset") return periodConfig(selection.period);
+  const days = differenceInCalendarDays(selection.to, selection.from);
+  const bucket: Bucket = days <= 31 ? "day" : days <= 180 ? "week" : "month";
+  return { start: selection.from, end: selection.to, bucket };
 }
 
 export async function getStreams() {
@@ -101,9 +141,9 @@ export async function getLatestRmbToBdtRate() {
   return rate?.rate ?? null;
 }
 
-export async function getStreamSummariesForPeriod(period: Period) {
+export async function getStreamSummariesForPeriod(selection: RangeSelection) {
   const streams = await getStreams();
-  const { start, end } = periodConfig(period);
+  const { start, end } = rangeConfig(selection);
 
   const summaries = await Promise.all(
     streams.map(async (stream) => {
@@ -119,9 +159,10 @@ export async function getStreamSummariesForPeriod(period: Period) {
   return summaries;
 }
 
-export async function getTrend(period: Period) {
+export async function getTrend(selection: RangeSelection) {
   const streams = await getStreams();
-  const { start, end, bucket } = periodConfig(period);
+  const { start, end, bucket } = rangeConfig(selection);
+  const spansMultipleYears = differenceInCalendarDays(end, start) > 366;
 
   const buckets =
     bucket === "day"
@@ -139,7 +180,7 @@ export async function getTrend(period: Period) {
         : eachMonthOfInterval({ start, end }).map((d) => ({
             start: startOfMonth(d),
             end: endOfMonth(d),
-            label: format(d, period === "2y" ? "MMM ''yy" : "MMM"),
+            label: format(d, spansMultipleYears ? "MMM ''yy" : "MMM"),
           }));
 
   const trend = await Promise.all(
@@ -164,8 +205,8 @@ export async function getTrend(period: Period) {
 
 // Expense totals by category, split per currency (mixing currencies in one
 // pie would misrepresent the split), for the "Spending by Category" chart.
-export async function getCategoryBreakdown(period: Period) {
-  const { start, end } = periodConfig(period);
+export async function getCategoryBreakdown(selection: RangeSelection) {
+  const { start, end } = rangeConfig(selection);
   const transactions = await prisma.transaction.findMany({
     where: { type: "expense", date: { gte: start, lte: end } },
   });
