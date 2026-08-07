@@ -1,3 +1,4 @@
+import { startOfDay, endOfDay } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { getAccountStatementLines, getUserBranding } from "@/lib/data";
 import { buildAccountStatementPdf } from "@/lib/invoice";
@@ -13,8 +14,11 @@ export async function GET(req: Request, ctx: RouteContext<"/accounts/[id]/statem
   const { searchParams } = new URL(req.url);
   const fromRaw = searchParams.get("from");
   const toRaw = searchParams.get("to");
-  const from = fromRaw ? new Date(fromRaw) : undefined;
-  const to = toRaw ? new Date(toRaw) : undefined;
+  // Date-only inputs parse to UTC midnight — without extending `to` through
+  // the end of that day, a transaction dated exactly on the `to` day would
+  // fall after the boundary and get silently excluded.
+  const from = fromRaw ? startOfDay(new Date(fromRaw)) : undefined;
+  const to = toRaw ? endOfDay(new Date(toRaw)) : undefined;
 
   const lines = await getAccountStatementLines(userId, id, { from, to });
   const branding = await getUserBranding(userId);
