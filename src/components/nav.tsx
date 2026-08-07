@@ -58,14 +58,16 @@ export function Nav({
           })}
 
           <form action={setTheme}>
-            <input type="hidden" name="theme" value={theme === "light" ? "dark" : "light"} />
-            <button
-              type="submit"
-              title={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
-              className="cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-foreground/70 transition-colors duration-150 hover:bg-foreground/5 hover:text-foreground"
+            <select
+              name="theme"
+              defaultValue={theme}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              aria-label="Theme"
+              className="cursor-pointer rounded-md border border-border bg-background px-2 py-2 text-sm font-medium text-foreground/70 outline-none transition-colors duration-150 hover:text-foreground focus:ring-2 focus:ring-ring"
             >
-              {theme === "light" ? "Dark" : "Light"}
-            </button>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
           </form>
 
           <form action={logout}>
