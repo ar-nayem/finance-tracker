@@ -1,6 +1,5 @@
 import { getVisitorAnalytics } from "@/lib/data";
 import { requireAdmin } from "@/lib/session";
-import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +104,7 @@ export default async function AdminAnalyticsPage() {
                   <span className="font-medium">{view.user.username}</span>
                   <span className="ml-2 text-foreground/70">{view.path}</span>
                 </div>
-                <span className="text-xs text-foreground/50">{formatDate(view.createdAt)}</span>
+                <span className="text-xs text-foreground/50">{formatDateTime(view.createdAt)}</span>
               </div>
             ))}
             {recentPageViews.length === 0 && <p className="text-foreground/50">No page views recorded yet.</p>}
