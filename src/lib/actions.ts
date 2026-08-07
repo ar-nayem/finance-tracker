@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSession, deleteSession, verifySession, requireAdmin } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
@@ -31,6 +32,19 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
 export async function logout() {
   await deleteSession();
   redirect("/login");
+}
+
+// Device display preference, not tied to a session/user — no auth check,
+// harmless to toggle from anywhere including the (unauthenticated) login page.
+export async function setTheme(formData: FormData) {
+  const theme = String(formData.get("theme") ?? "") === "light" ? "light" : "dark";
+  const cookieStore = await cookies();
+  cookieStore.set("theme", theme, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  revalidatePath("/", "layout");
 }
 
 export type ChangeCredentialsState = { error?: string; success?: string } | undefined;

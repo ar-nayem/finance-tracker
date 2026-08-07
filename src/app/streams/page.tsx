@@ -71,7 +71,7 @@ export default async function StreamsPage() {
             >
               <div className="flex items-center gap-2">
                 <span className="font-medium">{stream.name}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-foreground/50">
+                <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50">
                   {stream.currency}
                 </span>
               </div>
@@ -165,7 +165,7 @@ export default async function StreamsPage() {
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{account.name}</span>
-                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-foreground/50">
+                  <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50">
                     {account.currency}
                   </span>
                   <span className="text-xs text-foreground/40">

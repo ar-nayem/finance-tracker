@@ -32,8 +32,8 @@ export function PieChartCard({
             <Tooltip
               formatter={(value) => formatMoney(Number(value ?? 0), currency)}
               contentStyle={{
-                background: "#101A34",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: "var(--chart-tooltip-bg)",
+                border: "1px solid var(--chart-tooltip-border)",
                 borderRadius: 8,
                 fontSize: 13,
               }}

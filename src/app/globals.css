@@ -10,6 +10,31 @@
   --accent: #059669;
   --destructive: #dc2626;
   --ring: #1e40af;
+
+  /* Consumed directly as CSS var() strings by recharts (trend-chart.tsx,
+     pie-chart-card.tsx) — those props take raw color strings, not Tailwind
+     classes, so these aren't registered in @theme inline below. */
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-axis: rgba(255, 255, 255, 0.5);
+  --chart-tooltip-bg: #101a34;
+  --chart-tooltip-border: rgba(255, 255, 255, 0.08);
+}
+
+.light {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted: #eef2f7;
+  --border: rgba(15, 23, 42, 0.1);
+  --primary: #1e40af;
+  --on-primary: #ffffff;
+  --accent: #059669;
+  --destructive: #dc2626;
+  --ring: #1e40af;
+
+  --chart-grid: rgba(15, 23, 42, 0.1);
+  --chart-axis: rgba(15, 23, 42, 0.55);
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: rgba(15, 23, 42, 0.12);
 }
 
 @theme inline {

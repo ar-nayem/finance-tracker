@@ -37,7 +37,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
           <div>
             <h1 className="font-heading text-2xl font-semibold">
               {stream.name}{" "}
-              <span className="rounded-full bg-white/5 px-2 py-0.5 text-sm font-normal text-foreground/50">
+              <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-sm font-normal text-foreground/50">
                 {stream.currency}
               </span>
             </h1>

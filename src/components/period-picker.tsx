@@ -15,7 +15,7 @@ export function PeriodPicker({ basePath, selection }: { basePath: string; select
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
               selection.kind === "preset" && selection.period === p
                 ? "bg-primary text-on-primary"
-                : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
+                : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
             }`}
           >
             {p.toUpperCase()}

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logout } from "@/lib/actions";
+import { logout, setTheme } from "@/lib/actions";
+import type { Theme } from "@/lib/theme";
 
 const links = [
   { href: "/", label: "Dashboard" },
@@ -15,10 +16,12 @@ export function Nav({
   isAdmin,
   displayName,
   logoDataUrl,
+  theme,
 }: {
   isAdmin: boolean;
   displayName: string | null;
   logoDataUrl: string | null;
+  theme: Theme;
 }) {
   const pathname = usePathname();
 
@@ -46,17 +49,29 @@ export function Nav({
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${
                   active
                     ? "bg-primary text-on-primary"
-                    : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
+                    : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
                 {link.label}
               </Link>
             );
           })}
+
+          <form action={setTheme}>
+            <input type="hidden" name="theme" value={theme === "light" ? "dark" : "light"} />
+            <button
+              type="submit"
+              title={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+              className="cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-foreground/70 transition-colors duration-150 hover:bg-foreground/5 hover:text-foreground"
+            >
+              {theme === "light" ? "Dark" : "Light"}
+            </button>
+          </form>
+
           <form action={logout}>
             <button
               type="submit"
-              className="cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-foreground/70 transition-colors duration-150 hover:bg-white/5 hover:text-destructive"
+              className="cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-foreground/70 transition-colors duration-150 hover:bg-foreground/5 hover:text-destructive"
             >
               Logout
             </button>

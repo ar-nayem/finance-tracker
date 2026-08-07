@@ -217,7 +217,7 @@ export default async function InvestmentsPage() {
                   </select>
                   <button
                     type="submit"
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground/70 hover:bg-white/5"
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground/70 hover:bg-foreground/5"
                   >
                     Update
                   </button>
@@ -280,7 +280,7 @@ export default async function InvestmentsPage() {
               </label>
               <button
                 type="submit"
-                className="cursor-pointer rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:bg-white/5"
+                className="cursor-pointer rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
               >
                 Log return
               </button>

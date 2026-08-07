@@ -105,11 +105,11 @@ export default async function DashboardPage(props: PageProps<"/">) {
             <Link
               key={stream.id}
               href={streamHref(stream.id)}
-              className="rounded-lg border border-border bg-muted p-4 transition-colors duration-150 hover:border-primary/50 hover:bg-white/5"
+              className="rounded-lg border border-border bg-muted p-4 transition-colors duration-150 hover:border-primary/50 hover:bg-foreground/5"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground/70">{stream.name}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-foreground/50">
+                <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50">
                   {stream.currency}
                 </span>
               </div>
@@ -185,7 +185,7 @@ export default async function DashboardPage(props: PageProps<"/">) {
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
                   trendCurrency === c
                     ? "bg-primary text-on-primary"
-                    : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
+                    : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
                 {c}

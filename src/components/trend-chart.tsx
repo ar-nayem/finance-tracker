@@ -23,13 +23,13 @@ export function TrendChart({
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-        <XAxis dataKey="label" stroke="rgba(255,255,255,0.5)" fontSize={12} />
-        <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+        <XAxis dataKey="label" stroke="var(--chart-axis)" fontSize={12} />
+        <YAxis stroke="var(--chart-axis)" fontSize={12} />
         <Tooltip
           contentStyle={{
-            background: "#101A34",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "var(--chart-tooltip-bg)",
+            border: "1px solid var(--chart-tooltip-border)",
             borderRadius: 8,
             fontSize: 13,
           }}

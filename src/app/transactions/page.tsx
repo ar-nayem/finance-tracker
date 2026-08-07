@@ -291,14 +291,14 @@ export default async function TransactionsPage() {
                   <button
                     type="submit"
                     formAction={`/accounts/${a.id}/statement`}
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-white/5"
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
                   >
                     CSV
                   </button>
                   <button
                     type="submit"
                     formAction={`/accounts/${a.id}/statement/pdf`}
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-white/5"
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
                   >
                     PDF
                   </button>

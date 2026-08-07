@@ -34,7 +34,7 @@ export default async function AdminUsersPage() {
             >
               <div>
                 <span className="font-medium">{u.username}</span>
-                <span className="ml-2 rounded-full bg-white/5 px-2 py-0.5 text-xs text-foreground/50">
+                <span className="ml-2 rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50">
                   {u.role}
                 </span>
                 {u.disabled && (
@@ -58,7 +58,7 @@ export default async function AdminUsersPage() {
                   />
                   <button
                     type="submit"
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-white/5"
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
                   >
                     Reset password
                   </button>
