@@ -1,20 +1,21 @@
 import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import {
+  getStreams,
   getStreamSummariesForPeriod,
   getTrend,
   getCategoryBreakdown,
+  getIncomeBreakdown,
   getAccountInvestableBalances,
   getLatestRmbToBdtRate,
   getInvestmentPortfolio,
   resolveRangeSelection,
   describeRange,
-  PERIOD_LABELS,
-  type Period,
 } from "@/lib/data";
 import { setExchangeRate } from "@/lib/actions";
 import { TrendChart } from "@/components/trend-chart";
 import { PieChartCard } from "@/components/pie-chart-card";
+import { PeriodPicker } from "@/components/period-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +29,17 @@ export default async function DashboardPage(props: PageProps<"/">) {
   const selection = resolveRangeSelection(searchParams);
   const rangeLabel = describeRange(selection);
 
-  const [summaries, { trend, streamNames }, categoryBreakdown, balances, rate, investments] = await Promise.all([
-    getStreamSummariesForPeriod(selection),
-    getTrend(selection),
-    getCategoryBreakdown(selection),
-    getAccountInvestableBalances(),
-    getLatestRmbToBdtRate(),
-    getInvestmentPortfolio(),
-  ]);
+  const [streams, summaries, { trend, streamNames }, categoryBreakdown, incomeBreakdown, balances, rate, investments] =
+    await Promise.all([
+      getStreams(),
+      getStreamSummariesForPeriod(selection),
+      getTrend(selection),
+      getCategoryBreakdown(selection),
+      getIncomeBreakdown(selection),
+      getAccountInvestableBalances(),
+      getLatestRmbToBdtRate(),
+      getInvestmentPortfolio(),
+    ]);
 
   const totalsByCurrency = summaries.reduce<Record<string, number>>((acc, s) => {
     acc[s.stream.currency] = (acc[s.stream.currency] ?? 0) + s.net;
@@ -52,6 +56,24 @@ export default async function DashboardPage(props: PageProps<"/">) {
   const totalReturned = investments.reduce((s, i) => s + i.totalReturned, 0);
   const activeInvestments = investments.filter((i) => i.status === "active").length;
 
+  // Every stream's net, converted to one currency (BDT) so magnitudes
+  // actually line up on one chart instead of RMB dwarfing BDT or vice versa.
+  const currencyByStream = new Map(streams.map((s) => [s.name, s.currency]));
+  const combinedTrend = rate
+    ? trend.map((row) => {
+        const total = streamNames.reduce((sum, name) => {
+          const value = Number(row[name] ?? 0);
+          return sum + (currencyByStream.get(name) === "RMB" ? value * rate : value);
+        }, 0);
+        return { label: row.label, "Combined (BDT)": Math.round(total * 100) / 100 };
+      })
+    : null;
+
+  const streamHref = (id: string) =>
+    selection.kind === "preset"
+      ? `/streams/${id}?period=${selection.period}`
+      : `/streams/${id}?from=${selection.from.toISOString().slice(0, 10)}&to=${selection.to.toISOString().slice(0, 10)}`;
+
   return (
     <div className="flex flex-col gap-8">
       <section>
@@ -61,56 +83,17 @@ export default async function DashboardPage(props: PageProps<"/">) {
             <p className="mt-1 text-sm text-foreground/60">Net (income − expense) per income stream.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-wrap gap-1">
-              {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-                <Link
-                  key={p}
-                  href={`/?period=${p}`}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-                    selection.kind === "preset" && selection.period === p
-                      ? "bg-primary text-on-primary"
-                      : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
-                  }`}
-                >
-                  {p.toUpperCase()}
-                </Link>
-              ))}
-            </div>
-            <form
-              className={`flex items-center gap-1 rounded-md border px-2 py-1 ${
-                selection.kind === "custom" ? "border-primary" : "border-border"
-              }`}
-            >
-              <input
-                type="date"
-                name="from"
-                defaultValue={selection.kind === "custom" ? selection.from.toISOString().slice(0, 10) : undefined}
-                aria-label="From date"
-                required
-                className="rounded-md bg-background px-2 py-1 text-xs outline-none"
-              />
-              <span className="text-xs text-foreground/40">to</span>
-              <input
-                type="date"
-                name="to"
-                defaultValue={selection.kind === "custom" ? selection.to.toISOString().slice(0, 10) : undefined}
-                aria-label="To date"
-                required
-                className="rounded-md bg-background px-2 py-1 text-xs outline-none"
-              />
-              <button
-                type="submit"
-                className="cursor-pointer rounded-md bg-primary px-2 py-1 text-xs font-medium text-on-primary hover:bg-primary/90"
-              >
-                Apply
-              </button>
-            </form>
+            <PeriodPicker basePath="/" selection={selection} />
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {summaries.map(({ stream, income, expense, net }) => (
-            <div key={stream.id} className="rounded-lg border border-border bg-muted p-4">
+            <Link
+              key={stream.id}
+              href={streamHref(stream.id)}
+              className="rounded-lg border border-border bg-muted p-4 transition-colors duration-150 hover:border-primary/50 hover:bg-white/5"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground/70">{stream.name}</span>
                 <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-foreground/50">
@@ -132,7 +115,8 @@ export default async function DashboardPage(props: PageProps<"/">) {
                   Reserve {formatMoney(net * TAX_RESERVE_RATE, stream.currency)} for tax (25%)
                 </div>
               )}
-            </div>
+              <div className="mt-2 text-xs text-primary">View details -&gt;</div>
+            </Link>
           ))}
         </div>
       </section>
@@ -179,6 +163,22 @@ export default async function DashboardPage(props: PageProps<"/">) {
         </div>
       </section>
 
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">{rangeLabel} Combined Trend (BDT)</h2>
+        <p className="text-sm text-foreground/60">
+          Every stream converted to BDT with the rate above, so magnitudes are actually comparable.
+        </p>
+        <div className="mt-4">
+          {combinedTrend ? (
+            <TrendChart data={combinedTrend} streamNames={["Combined (BDT)"]} />
+          ) : (
+            <p className="py-8 text-center text-sm text-foreground/50">
+              Set today&apos;s exchange rate above to see the combined trend.
+            </p>
+          )}
+        </div>
+      </section>
+
       <section>
         <h2 className="font-heading text-lg font-semibold">Spending by Category</h2>
         <p className="mt-1 text-sm text-foreground/60">{rangeLabel}, expenses only.</p>
@@ -188,6 +188,19 @@ export default async function DashboardPage(props: PageProps<"/">) {
           ))}
           {categoryBreakdown.length === 0 && (
             <p className="text-sm text-foreground/50">No expenses in this period.</p>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-heading text-lg font-semibold">Income by Source</h2>
+        <p className="mt-1 text-sm text-foreground/60">{rangeLabel}, income only.</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {incomeBreakdown.map(({ currency, data }) => (
+            <PieChartCard key={currency} title="Income by Source" data={data} currency={currency} />
+          ))}
+          {incomeBreakdown.length === 0 && (
+            <p className="text-sm text-foreground/50">No income in this period.</p>
           )}
         </div>
       </section>

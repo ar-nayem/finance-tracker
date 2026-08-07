@@ -227,6 +227,31 @@ export async function getCategoryBreakdown(selection: RangeSelection) {
   }));
 }
 
+// Income totals by stream (source), split per currency, for the "Income by
+// Source" chart — same shape as getCategoryBreakdown but grouped by where
+// the money came from rather than what it was spent on.
+export async function getIncomeBreakdown(selection: RangeSelection) {
+  const { start, end } = rangeConfig(selection);
+  const transactions = await prisma.transaction.findMany({
+    where: { type: "income", date: { gte: start, lte: end } },
+    include: { stream: true },
+  });
+
+  const byCurrency = new Map<string, Map<string, number>>();
+  for (const t of transactions) {
+    const streamTotals = byCurrency.get(t.currency) ?? new Map<string, number>();
+    streamTotals.set(t.stream.name, (streamTotals.get(t.stream.name) ?? 0) + t.amount);
+    byCurrency.set(t.currency, streamTotals);
+  }
+
+  return [...byCurrency.entries()].map(([currency, totals]) => ({
+    currency,
+    data: [...totals.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value),
+  }));
+}
+
 // Capital deployed by investment type, split per currency, for the
 // investments page's "Portfolio Allocation" chart.
 export async function getInvestmentAllocation() {
@@ -318,6 +343,35 @@ export async function getAccountInvestableBalance(accountId: string) {
   });
 
   return { account, ...computeAvailableBalance(account) };
+}
+
+// Full breakdown for a single stream's detail page: every transaction in
+// range (not just recent), totals, and its own category split — the
+// per-stream "drill in" view the dashboard summary cards link to.
+export async function getStreamDetail(streamId: string, selection: RangeSelection) {
+  const stream = await prisma.stream.findUniqueOrThrow({ where: { id: streamId } });
+  const { start, end } = rangeConfig(selection);
+
+  const transactions = await prisma.transaction.findMany({
+    where: { streamId, date: { gte: start, lte: end } },
+    include: { account: true, document: true },
+    orderBy: { date: "desc" },
+  });
+
+  const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+
+  const categoryTotals = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.type !== "expense") continue;
+    const key = t.category ?? "Uncategorized";
+    categoryTotals.set(key, (categoryTotals.get(key) ?? 0) + t.amount);
+  }
+  const categoryBreakdown = [...categoryTotals.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+
+  return { stream, transactions, income, expense, net: income - expense, categoryBreakdown };
 }
 
 export async function getRecentTransactions(limit = 20) {
