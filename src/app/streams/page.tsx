@@ -5,6 +5,7 @@ import {
 } from "@/lib/data";
 import { createStream, deleteStream, createAccount, deleteAccount } from "@/lib/actions";
 import { ChangeCredentialsForm } from "@/components/change-credentials-form";
+import { BrandingForm } from "@/components/branding-form";
 import { verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -201,6 +202,14 @@ export default async function StreamsPage() {
           <ChangeCredentialsForm currentUsername={currentUsername} />
         </section>
       )}
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">Branding</h2>
+        <p className="text-sm text-foreground/60">
+          Shown in the nav bar and on generated invoices/statements instead of the default name.
+        </p>
+        <BrandingForm currentDisplayName={user.displayName} currentLogoDataUrl={user.logoDataUrl} />
+      </section>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getAccountStatementLines } from "@/lib/data";
+import { getAccountStatementLines, getUserBranding } from "@/lib/data";
 import { buildAccountStatementPdf } from "@/lib/invoice";
 import { verifySession } from "@/lib/session";
 
@@ -17,7 +17,8 @@ export async function GET(req: Request, ctx: RouteContext<"/accounts/[id]/statem
   const to = toRaw ? new Date(toRaw) : undefined;
 
   const lines = await getAccountStatementLines(userId, id, { from, to });
-  const bytes = await buildAccountStatementPdf(account, lines, { from, to });
+  const branding = await getUserBranding(userId);
+  const bytes = await buildAccountStatementPdf(account, lines, { from, to }, branding);
   const suffix = fromRaw || toRaw ? `-${fromRaw ?? "start"}_to_${toRaw ?? "now"}` : "";
 
   return new Response(new Uint8Array(bytes), {

@@ -11,7 +11,15 @@ const links = [
   { href: "/streams", label: "Manage" },
 ];
 
-export function Nav({ isAdmin }: { isAdmin: boolean }) {
+export function Nav({
+  isAdmin,
+  displayName,
+  logoDataUrl,
+}: {
+  isAdmin: boolean;
+  displayName: string | null;
+  logoDataUrl: string | null;
+}) {
   const pathname = usePathname();
 
   if (pathname === "/login") return null;
@@ -21,8 +29,12 @@ export function Nav({ isAdmin }: { isAdmin: boolean }) {
   return (
     <header className="border-b border-border bg-muted">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-        <span className="font-heading text-lg font-semibold tracking-tight">
-          Finance Tracker
+        <span className="flex items-center gap-2 font-heading text-lg font-semibold tracking-tight">
+          {logoDataUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoDataUrl} alt="" className="h-7 w-7 rounded object-cover" />
+          )}
+          {displayName || "Finance Tracker"}
         </span>
         <nav className="flex items-center gap-1">
           {allLinks.map((link) => {

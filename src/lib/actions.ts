@@ -80,6 +80,44 @@ export async function changeCredentials(
   return { success: "Login credentials updated" };
 }
 
+const MAX_LOGO_BYTES = 300 * 1024; // stored inline on the User row and read on
+// every page render (nav) — kept small on purpose, not a general upload.
+
+export type BrandingState = { error?: string; success?: string } | undefined;
+
+export async function updateBranding(
+  _prevState: BrandingState,
+  formData: FormData
+): Promise<BrandingState> {
+  const { userId } = await verifySession();
+  const displayName = String(formData.get("displayName") ?? "").trim() || null;
+  const removeLogo = String(formData.get("removeLogo") ?? "") === "true";
+  const file = formData.get("logo");
+
+  let logoDataUrl: string | null | undefined = removeLogo ? null : undefined;
+  if (file instanceof File && file.size > 0) {
+    if (!file.type.startsWith("image/")) {
+      return { error: "Logo must be an image file" };
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      return { error: `Logo must be under ${Math.round(MAX_LOGO_BYTES / 1024)}KB` };
+    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    logoDataUrl = `data:${file.type};base64,${bytes.toString("base64")}`;
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      displayName,
+      ...(logoDataUrl !== undefined ? { logoDataUrl } : {}),
+    },
+  });
+
+  revalidatePath("/", "layout");
+  return { success: "Branding updated" };
+}
+
 // --- Admin: user management -------------------------------------------
 
 export type AdminActionState = { error?: string; success?: string } | undefined;
@@ -199,6 +237,61 @@ export async function createTransaction(formData: FormData) {
       streamId,
       documentId,
       userId,
+    },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/transactions");
+  revalidatePath("/investments");
+  redirect("/transactions");
+}
+
+export async function updateTransaction(formData: FormData) {
+  const { userId } = await verifySession();
+  const id = String(formData.get("id") ?? "");
+  const accountId = String(formData.get("accountId") ?? "");
+  const streamId = String(formData.get("streamId") ?? "");
+  const type = String(formData.get("type") ?? "");
+  const dateRaw = String(formData.get("date") ?? "");
+  const category = String(formData.get("category") ?? "").trim() || null;
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const amount = parseAmount(formData.get("amount"));
+
+  if (!id) throw new Error("Missing transaction id");
+  if (!accountId || !streamId) throw new Error("Account and stream are required");
+  if (type !== "income" && type !== "expense") throw new Error("Invalid type");
+
+  const existing = await prisma.transaction.findFirst({ where: { id, userId } });
+  if (!existing) throw new Error("Transaction not found");
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+  if (!account) throw new Error("Account not found");
+  const stream = await prisma.stream.findFirst({ where: { id: streamId, userId } });
+  if (!stream) throw new Error("Stream not found");
+
+  // A newly chosen file replaces the existing attachment; leaving the file
+  // input empty keeps whatever was already attached untouched.
+  const newDocumentId = await saveOptionalAttachment(formData, userId);
+  let documentId = existing.documentId;
+  if (newDocumentId) {
+    if (existing.documentId) {
+      const oldDocument = await prisma.document.delete({ where: { id: existing.documentId, userId } });
+      await deleteDocumentFile(oldDocument.filePath);
+    }
+    documentId = newDocumentId;
+  }
+
+  await prisma.transaction.update({
+    where: { id, userId },
+    data: {
+      date: dateRaw ? new Date(dateRaw) : existing.date,
+      amount,
+      currency: account.currency,
+      type,
+      category,
+      note,
+      accountId,
+      streamId,
+      documentId,
     },
   });
 

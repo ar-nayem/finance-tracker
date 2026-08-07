@@ -21,6 +21,16 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Personal branding shown in the nav bar and on generated PDFs (invoices,
+  // statements) in place of the generic "Finance Tracker" name/mark.
+  // Logo stored inline as a data URL (capped small in updateBranding) rather
+  // than on disk — it needs to be read synchronously in two very different
+  // places (server-rendered <img> in the nav, raw bytes embedded into a
+  // pdf-lib document) and is tiny enough that a UPLOADS_DIR file plus a
+  // third authenticated download route would be pure overhead by comparison.
+  displayName String?
+  logoDataUrl String?
+
   streams      Stream[]
   accounts     Account[]
   transactions Transaction[]

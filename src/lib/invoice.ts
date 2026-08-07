@@ -1,6 +1,41 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import type { PDFImage } from "pdf-lib";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { StatementLine } from "@/lib/data";
+
+export type Branding = { displayName: string | null; logoDataUrl: string | null };
+
+// pdf-lib only embeds PNG/JPEG natively; other image types (webp, gif, ...)
+// just fall back to no logo in the PDF rather than throwing — the nav bar
+// still shows them fine since a browser <img> isn't limited the same way.
+async function embedLogo(doc: PDFDocument, dataUrl: string | null | undefined): Promise<PDFImage | null> {
+  if (!dataUrl) return null;
+  const match = /^data:(image\/\w+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return null;
+  const [, mime, base64] = match;
+  const bytes = Buffer.from(base64, "base64");
+  try {
+    if (mime === "image/png") return await doc.embedPng(bytes);
+    if (mime === "image/jpeg" || mime === "image/jpg") return await doc.embedJpg(bytes);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+// Draws the logo (if any) to the left of the brand-name title at (x, y) and
+// returns the x the title text should start at.
+function drawBrandMark(
+  page: import("pdf-lib").PDFPage,
+  logo: PDFImage | null,
+  x: number,
+  y: number
+): number {
+  if (!logo) return x;
+  const size = 22;
+  page.drawImage(logo, { x, y: y - 4, width: size, height: size });
+  return x + size + 8;
+}
 
 type InvoiceTransaction = {
   id: string;
@@ -24,16 +59,22 @@ const BAD = rgb(0.75, 0.2, 0.2);
 // BDT -> "BDT 1,234") only uses characters within pdf-lib's default WinAnsi
 // encoding, so the standard Helvetica fonts are enough here — no fontkit /
 // custom font needed. Revisit if a currency using non-Latin glyphs is added.
-export async function buildTransactionInvoicePdf(transaction: InvoiceTransaction): Promise<Uint8Array> {
+export async function buildTransactionInvoicePdf(
+  transaction: InvoiceTransaction,
+  branding?: Branding
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]);
   const { width, height } = page.getSize();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const logo = await embedLogo(doc, branding?.logoDataUrl);
+  const brandName = branding?.displayName || "Finance Tracker";
 
   let y = height - 72;
 
-  page.drawText("Finance Tracker", { x: 56, y, size: 20, font: bold, color: ACCENT });
+  const titleX = drawBrandMark(page, logo, 56, y);
+  page.drawText(brandName, { x: titleX, y, size: 20, font: bold, color: ACCENT });
   y -= 22;
   page.drawText("Transaction Receipt", { x: 56, y, size: 13, font, color: MUTED });
 
@@ -103,11 +144,14 @@ const STATEMENT_COLUMNS: StatementColumn[] = [
 export async function buildAccountStatementPdf(
   account: { name: string; currency: string },
   lines: StatementLine[],
-  range: { from?: Date; to?: Date }
+  range: { from?: Date; to?: Date },
+  branding?: Branding
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const logo = await embedLogo(doc, branding?.logoDataUrl);
+  const brandName = branding?.displayName || "Finance Tracker";
 
   let page = doc.addPage(PAGE_SIZE);
   let { width, height } = page.getSize();
@@ -141,7 +185,8 @@ export async function buildAccountStatementPdf(
     return truncated + "…";
   };
 
-  page.drawText("Finance Tracker", { x: MARGIN, y, size: 20, font: bold, color: ACCENT });
+  const titleX = drawBrandMark(page, logo, MARGIN, y);
+  page.drawText(brandName, { x: titleX, y, size: 20, font: bold, color: ACCENT });
   y -= 22;
   page.drawText(`Account Statement — ${account.name}`, { x: MARGIN, y, size: 13, font, color: MUTED });
 

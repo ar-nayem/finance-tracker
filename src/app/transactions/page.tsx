@@ -226,6 +226,9 @@ export default async function TransactionsPage() {
                   </td>
                   <td className="py-2 pl-3">
                     <div className="flex items-center justify-end gap-3">
+                      <a href={`/transactions/${t.id}/edit`} className="text-xs text-primary hover:underline">
+                        Edit
+                      </a>
                       <a
                         href={`/transactions/${t.id}/invoice`}
                         target="_blank"

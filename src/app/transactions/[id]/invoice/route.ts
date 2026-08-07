@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { buildTransactionInvoicePdf } from "@/lib/invoice";
 import { verifySession } from "@/lib/session";
+import { getUserBranding } from "@/lib/data";
 
 export async function GET(_req: Request, ctx: RouteContext<"/transactions/[id]/invoice">) {
   const { userId } = await verifySession();
@@ -12,7 +13,8 @@ export async function GET(_req: Request, ctx: RouteContext<"/transactions/[id]/i
   });
   if (!transaction) return new Response("Not found", { status: 404 });
 
-  const bytes = await buildTransactionInvoicePdf(transaction);
+  const branding = await getUserBranding(userId);
+  const bytes = await buildTransactionInvoicePdf(transaction, branding);
 
   return new Response(new Uint8Array(bytes), {
     headers: {

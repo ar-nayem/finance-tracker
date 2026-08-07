@@ -104,6 +104,14 @@ export async function getAllUsers() {
   return prisma.user.findMany({ orderBy: { createdAt: "asc" } });
 }
 
+export async function getUserBranding(userId: string) {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { displayName: true, logoDataUrl: true },
+  });
+  return user;
+}
+
 // --- Everything below is scoped to a single user's data ------------------
 
 export async function getStreams(userId: string) {
@@ -419,6 +427,13 @@ export async function getStreamDetail(userId: string, streamId: string, selectio
     categoryBreakdown,
     incomeCategoryBreakdown,
   };
+}
+
+export async function getTransaction(userId: string, id: string) {
+  return prisma.transaction.findFirst({
+    where: { id, userId },
+    include: { document: true },
+  });
 }
 
 export async function getRecentTransactions(userId: string, limit = 20) {
