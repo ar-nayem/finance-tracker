@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createSession, deleteSession, verifySession, requireAdmin } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
@@ -26,6 +26,18 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
   }
 
   await createSession(user.id, user.sessionVersion);
+
+  const hdrs = await headers();
+  await prisma.loginEvent
+    .create({
+      data: {
+        userId: user.id,
+        ipAddress: hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? hdrs.get("x-real-ip"),
+        userAgent: hdrs.get("user-agent"),
+      },
+    })
+    .catch(() => {}); // never block a real login on a logging failure
+
   redirect("/");
 }
 

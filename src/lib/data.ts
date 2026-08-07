@@ -112,6 +112,43 @@ export async function getUserBranding(userId: string) {
   return user;
 }
 
+// Admin-only visitor analysis: a per-user summary (login/page-view counts,
+// last login, most-visited paths) plus recent raw events for a closer look.
+export async function getVisitorAnalytics() {
+  const users = await getAllUsers();
+
+  const perUser = await Promise.all(
+    users.map(async (user) => {
+      const [loginCount, pageViewCount, lastLogin, topPaths] = await Promise.all([
+        prisma.loginEvent.count({ where: { userId: user.id } }),
+        prisma.pageView.count({ where: { userId: user.id } }),
+        prisma.loginEvent.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }),
+        prisma.pageView.groupBy({
+          by: ["path"],
+          where: { userId: user.id },
+          _count: { path: true },
+          orderBy: { _count: { path: "desc" } },
+          take: 5,
+        }),
+      ]);
+      return {
+        user,
+        loginCount,
+        pageViewCount,
+        lastLogin,
+        topPaths: topPaths.map((p) => ({ path: p.path, count: p._count.path })),
+      };
+    })
+  );
+
+  const [recentLogins, recentPageViews] = await Promise.all([
+    prisma.loginEvent.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { user: true } }),
+    prisma.pageView.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { user: true } }),
+  ]);
+
+  return { perUser, recentLogins, recentPageViews };
+}
+
 // --- Everything below is scoped to a single user's data ------------------
 
 export async function getStreams(userId: string) {

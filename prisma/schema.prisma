@@ -37,6 +37,33 @@ model User {
   investments  Investment[]
   transfers    Transfer[]
   documents    Document[]
+  loginEvents  LoginEvent[]
+  pageViews    PageView[]
+}
+
+// One row per successful login — admin-only visitor analysis. IP/user-agent
+// come from request headers at the moment login() succeeds, not inferred
+// later, so this only ever reflects real completed logins (never failed
+// attempts, which have no authenticated user to attribute them to).
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+// One row per authenticated page load (GET requests only — see proxy.ts).
+// Deliberately lighter than LoginEvent (no IP/UA) since this is high-volume
+// by nature; IP/browser detail matters more for login/security review than
+// routine navigation.
+model PageView {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  path      String
+  createdAt DateTime @default(now())
 }
 
 // currency: "RMB" | "BDT"
