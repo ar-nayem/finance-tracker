@@ -16,7 +16,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
   const detail = await getStreamDetail(id, selection).catch(() => null);
   if (!detail) notFound();
 
-  const { stream, transactions, income, expense, net, categoryBreakdown } = detail;
+  const { stream, transactions, income, expense, net, categoryBreakdown, incomeCategoryBreakdown } = detail;
 
   return (
     <div className="flex flex-col gap-8">
@@ -64,9 +64,14 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
         </div>
       </section>
 
-      {categoryBreakdown.length > 0 && (
+      {(categoryBreakdown.length > 0 || incomeCategoryBreakdown.length > 0) && (
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <PieChartCard title="Spending by Category" data={categoryBreakdown} currency={stream.currency} />
+          {categoryBreakdown.length > 0 && (
+            <PieChartCard title="Spending by Category" data={categoryBreakdown} currency={stream.currency} />
+          )}
+          {incomeCategoryBreakdown.length > 0 && (
+            <PieChartCard title="Income by Category" data={incomeCategoryBreakdown} currency={stream.currency} />
+          )}
         </section>
       )}
 

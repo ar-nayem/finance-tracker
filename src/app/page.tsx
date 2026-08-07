@@ -56,23 +56,34 @@ export default async function DashboardPage(props: PageProps<"/">) {
   const totalReturned = investments.reduce((s, i) => s + i.totalReturned, 0);
   const activeInvestments = investments.filter((i) => i.status === "active").length;
 
-  // Every stream's net, converted to one currency (BDT) so magnitudes
-  // actually line up on one chart instead of RMB dwarfing BDT or vice versa.
-  const currencyByStream = new Map(streams.map((s) => [s.name, s.currency]));
-  const combinedTrend = rate
-    ? trend.map((row) => {
-        const total = streamNames.reduce((sum, name) => {
-          const value = Number(row[name] ?? 0);
-          return sum + (currencyByStream.get(name) === "RMB" ? value * rate : value);
-        }, 0);
-        return { label: row.label, "Combined (BDT)": Math.round(total * 100) / 100 };
-      })
-    : null;
-
-  const streamHref = (id: string) =>
+  const rangeQuery =
     selection.kind === "preset"
-      ? `/streams/${id}?period=${selection.period}`
-      : `/streams/${id}?from=${selection.from.toISOString().slice(0, 10)}&to=${selection.to.toISOString().slice(0, 10)}`;
+      ? `period=${selection.period}`
+      : `from=${selection.from.toISOString().slice(0, 10)}&to=${selection.to.toISOString().slice(0, 10)}`;
+
+  const streamHref = (id: string) => `/streams/${id}?${rangeQuery}`;
+
+  // Every stream still shown on its own line, but converted into whichever
+  // single currency is toggled — RMB and BDT streams otherwise sit on the
+  // same axis at wildly different scales and aren't comparable as-is.
+  const currencyByStream = new Map(streams.map((s) => [s.name, s.currency]));
+  const trendCurrencyRaw = Array.isArray(searchParams.tc) ? searchParams.tc[0] : searchParams.tc;
+  const trendCurrency: "RMB" | "BDT" = trendCurrencyRaw === "BDT" ? "BDT" : "RMB";
+  const displayTrend = trend.map((row) => {
+    const converted: Record<string, string | number> = { label: row.label };
+    for (const name of streamNames) {
+      const value = Number(row[name] ?? 0);
+      const streamCurrency = currencyByStream.get(name);
+      if (!rate || streamCurrency === trendCurrency) {
+        converted[name] = value;
+      } else if (streamCurrency === "RMB" && trendCurrency === "BDT") {
+        converted[name] = Math.round(value * rate * 100) / 100;
+      } else {
+        converted[name] = Math.round((value / rate) * 100) / 100;
+      }
+    }
+    return converted;
+  });
 
   return (
     <div className="flex flex-col gap-8">
@@ -156,26 +167,32 @@ export default async function DashboardPage(props: PageProps<"/">) {
       </section>
 
       <section className="rounded-lg border border-border bg-muted p-4">
-        <h2 className="font-heading text-lg font-semibold">{rangeLabel} Trend</h2>
-        <p className="text-sm text-foreground/60">Net per stream, native currency.</p>
-        <div className="mt-4">
-          <TrendChart data={trend} streamNames={streamNames} />
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-muted p-4">
-        <h2 className="font-heading text-lg font-semibold">{rangeLabel} Combined Trend (BDT)</h2>
-        <p className="text-sm text-foreground/60">
-          Every stream converted to BDT with the rate above, so magnitudes are actually comparable.
-        </p>
-        <div className="mt-4">
-          {combinedTrend ? (
-            <TrendChart data={combinedTrend} streamNames={["Combined (BDT)"]} />
-          ) : (
-            <p className="py-8 text-center text-sm text-foreground/50">
-              Set today&apos;s exchange rate above to see the combined trend.
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-lg font-semibold">{rangeLabel} Trend</h2>
+            <p className="text-sm text-foreground/60">
+              Net per stream, shown in {trendCurrency}
+              {!rate && " — set the exchange rate above for accurate conversion"}.
             </p>
-          )}
+          </div>
+          <div className="flex gap-1">
+            {(["RMB", "BDT"] as const).map((c) => (
+              <Link
+                key={c}
+                href={`/?${rangeQuery}&tc=${c}`}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
+                  trendCurrency === c
+                    ? "bg-primary text-on-primary"
+                    : "text-foreground/70 hover:bg-white/5 hover:text-foreground"
+                }`}
+              >
+                {c}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4">
+          <TrendChart data={displayTrend} streamNames={streamNames} />
         </div>
       </section>
 
@@ -193,11 +210,11 @@ export default async function DashboardPage(props: PageProps<"/">) {
       </section>
 
       <section>
-        <h2 className="font-heading text-lg font-semibold">Income by Source</h2>
+        <h2 className="font-heading text-lg font-semibold">Income by Category</h2>
         <p className="mt-1 text-sm text-foreground/60">{rangeLabel}, income only.</p>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           {incomeBreakdown.map(({ currency, data }) => (
-            <PieChartCard key={currency} title="Income by Source" data={data} currency={currency} />
+            <PieChartCard key={currency} title="Income by Category" data={data} currency={currency} />
           ))}
           {incomeBreakdown.length === 0 && (
             <p className="text-sm text-foreground/50">No income in this period.</p>
