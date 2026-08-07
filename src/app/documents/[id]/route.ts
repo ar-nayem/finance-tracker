@@ -3,10 +3,10 @@ import { readDocumentFile } from "@/lib/documents";
 import { verifySession } from "@/lib/session";
 
 export async function GET(_req: Request, ctx: RouteContext<"/documents/[id]">) {
-  await verifySession();
+  const { userId } = await verifySession();
   const { id } = await ctx.params;
 
-  const document = await prisma.document.findUnique({ where: { id } });
+  const document = await prisma.document.findFirst({ where: { id, userId } });
   if (!document) return new Response("Not found", { status: 404 });
 
   const bytes = await readDocumentFile(document.filePath);

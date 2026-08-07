@@ -3,10 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createSession, deleteSession, verifySession } from "@/lib/session";
+import { createSession, deleteSession, verifySession, requireAdmin } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
 import { getAccountInvestableBalance } from "@/lib/data";
+
+const WRONG_CREDENTIALS_ERROR = "Wrong username or password";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -14,12 +16,15 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  const credential = await prisma.appCredential.findFirst();
-  if (!credential || credential.username !== username || !verifyPassword(password, credential.passwordHash)) {
-    return { error: "Wrong username or password" };
+  const user = await prisma.user.findUnique({ where: { username } });
+  // Same generic error whether the user doesn't exist, the password is
+  // wrong, or the account is disabled — none of those should be
+  // distinguishable to someone probing the login form.
+  if (!user || user.disabled || !verifyPassword(password, user.passwordHash)) {
+    return { error: WRONG_CREDENTIALS_ERROR };
   }
 
-  await createSession(credential.id);
+  await createSession(user.id, user.sessionVersion);
   redirect("/");
 }
 
@@ -34,16 +39,14 @@ export async function changeCredentials(
   _prevState: ChangeCredentialsState,
   formData: FormData
 ): Promise<ChangeCredentialsState> {
-  const session = await verifySession();
+  const { userId } = await verifySession();
   const currentPassword = String(formData.get("currentPassword") ?? "");
   const newUsername = String(formData.get("newUsername") ?? "").trim();
   const newPassword = String(formData.get("newPassword") ?? "");
 
-  const credential = await prisma.appCredential.findUniqueOrThrow({
-    where: { id: session.credentialId },
-  });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
-  if (!verifyPassword(currentPassword, credential.passwordHash)) {
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
     return { error: "Current password is wrong" };
   }
   if (!newUsername) {
@@ -53,16 +56,89 @@ export async function changeCredentials(
     return { error: "New password must be at least 8 characters" };
   }
 
-  await prisma.appCredential.update({
-    where: { id: credential.id },
-    data: {
-      username: newUsername,
-      passwordHash: newPassword ? hashPassword(newPassword) : credential.passwordHash,
-    },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        username: newUsername,
+        passwordHash: newPassword ? hashPassword(newPassword) : user.passwordHash,
+        // Bump so any other live session under the old password is forced
+        // to re-authenticate — a password change should invalidate
+        // sessions issued before it, not just future logins.
+        ...(newPassword ? { sessionVersion: { increment: 1 } } : {}),
+      },
+    });
+  } catch {
+    return { error: `Username "${newUsername}" is already taken` };
+  }
+
+  if (newPassword) {
+    const refreshed = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    await createSession(refreshed.id, refreshed.sessionVersion);
+  }
 
   return { success: "Login credentials updated" };
 }
+
+// --- Admin: user management -------------------------------------------
+
+export type AdminActionState = { error?: string; success?: string } | undefined;
+
+export async function createUser(
+  _prevState: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  await requireAdmin();
+  const username = String(formData.get("username") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const role = String(formData.get("role") ?? "user") === "admin" ? "admin" : "user";
+
+  if (!username) return { error: "Username is required" };
+  if (password.length < 8) return { error: "Password must be at least 8 characters" };
+
+  try {
+    await prisma.user.create({
+      data: { username, passwordHash: hashPassword(password), role },
+    });
+  } catch {
+    return { error: `Username "${username}" is already taken` };
+  }
+
+  revalidatePath("/admin/users");
+  return { success: `Created ${username}` };
+}
+
+export async function adminResetPassword(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const password = String(formData.get("password") ?? "");
+  if (!id) throw new Error("Missing user id");
+  if (password.length < 8) throw new Error("Password must be at least 8 characters");
+
+  await prisma.user.update({
+    where: { id },
+    data: { passwordHash: hashPassword(password), sessionVersion: { increment: 1 } },
+  });
+
+  revalidatePath("/admin/users");
+}
+
+export async function toggleUserDisabled(formData: FormData) {
+  const { userId: adminId } = await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const disabled = String(formData.get("disabled") ?? "") === "true";
+  if (!id) throw new Error("Missing user id");
+  if (id === adminId) throw new Error("Can't disable your own account");
+
+  await prisma.user.update({
+    where: { id },
+    data: { disabled, sessionVersion: { increment: 1 } },
+  });
+
+  revalidatePath("/admin/users");
+}
+
+// --- Everything below scoped to the signed-in user ----------------------
 
 function parseAmount(raw: FormDataEntryValue | null): number {
   const value = Number(raw);
@@ -74,7 +150,7 @@ function parseAmount(raw: FormDataEntryValue | null): number {
 
 // Optional attachment on a transaction/investment creation form. Absent or
 // empty file input means "no attachment" — never required.
-async function saveOptionalAttachment(formData: FormData): Promise<string | null> {
+async function saveOptionalAttachment(formData: FormData, userId: string): Promise<string | null> {
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return null;
 
@@ -85,13 +161,14 @@ async function saveOptionalAttachment(formData: FormData): Promise<string | null
       filePath,
       fileSize,
       mimeType: file.type || "application/octet-stream",
+      userId,
     },
   });
   return document.id;
 }
 
 export async function createTransaction(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const accountId = String(formData.get("accountId") ?? "");
   const streamId = String(formData.get("streamId") ?? "");
   const type = String(formData.get("type") ?? "");
@@ -103,8 +180,12 @@ export async function createTransaction(formData: FormData) {
   if (!accountId || !streamId) throw new Error("Account and stream are required");
   if (type !== "income" && type !== "expense") throw new Error("Invalid type");
 
-  const account = await prisma.account.findUniqueOrThrow({ where: { id: accountId } });
-  const documentId = await saveOptionalAttachment(formData);
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+  if (!account) throw new Error("Account not found");
+  const stream = await prisma.stream.findFirst({ where: { id: streamId, userId } });
+  if (!stream) throw new Error("Stream not found");
+
+  const documentId = await saveOptionalAttachment(formData, userId);
 
   await prisma.transaction.create({
     data: {
@@ -117,6 +198,7 @@ export async function createTransaction(formData: FormData) {
       accountId,
       streamId,
       documentId,
+      userId,
     },
   });
 
@@ -127,13 +209,18 @@ export async function createTransaction(formData: FormData) {
 }
 
 export async function deleteTransaction(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing transaction id");
 
-  const transaction = await prisma.transaction.delete({ where: { id } });
+  let transaction;
+  try {
+    transaction = await prisma.transaction.delete({ where: { id, userId } });
+  } catch {
+    throw new Error("Transaction not found");
+  }
   if (transaction.documentId) {
-    const document = await prisma.document.delete({ where: { id: transaction.documentId } });
+    const document = await prisma.document.delete({ where: { id: transaction.documentId, userId } });
     await deleteDocumentFile(document.filePath);
   }
 
@@ -143,7 +230,7 @@ export async function deleteTransaction(formData: FormData) {
 }
 
 export async function createTransfer(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const fromAccountId = String(formData.get("fromAccountId") ?? "");
   const toAccountId = String(formData.get("toAccountId") ?? "");
   const dateRaw = String(formData.get("date") ?? "");
@@ -153,8 +240,9 @@ export async function createTransfer(formData: FormData) {
   if (!fromAccountId || !toAccountId) throw new Error("Both accounts are required");
   if (fromAccountId === toAccountId) throw new Error("Can't transfer an account to itself");
 
-  const { account: fromAccount, available } = await getAccountInvestableBalance(fromAccountId);
-  const toAccount = await prisma.account.findUniqueOrThrow({ where: { id: toAccountId } });
+  const { account: fromAccount, available } = await getAccountInvestableBalance(fromAccountId, userId);
+  const toAccount = await prisma.account.findFirst({ where: { id: toAccountId, userId } });
+  if (!toAccount) throw new Error("Destination account not found");
 
   const toAmount =
     fromAccount.currency === toAccount.currency ? fromAmount : parseAmount(formData.get("toAmount"));
@@ -175,6 +263,7 @@ export async function createTransfer(formData: FormData) {
       toAmount,
       toCurrency: toAccount.currency,
       note,
+      userId,
     },
   });
 
@@ -185,11 +274,15 @@ export async function createTransfer(formData: FormData) {
 }
 
 export async function deleteTransfer(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing transfer id");
 
-  await prisma.transfer.delete({ where: { id } });
+  try {
+    await prisma.transfer.delete({ where: { id, userId } });
+  } catch {
+    throw new Error("Transfer not found");
+  }
 
   revalidatePath("/");
   revalidatePath("/transactions");
@@ -197,7 +290,7 @@ export async function deleteTransfer(formData: FormData) {
 }
 
 export async function createInvestment(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const name = String(formData.get("name") ?? "").trim();
   const accountId = String(formData.get("accountId") ?? "");
   const dateRaw = String(formData.get("date") ?? "");
@@ -208,7 +301,7 @@ export async function createInvestment(formData: FormData) {
   if (!name) throw new Error("Investment name is required");
   if (!accountId) throw new Error("Funding account is required");
 
-  const { account, available } = await getAccountInvestableBalance(accountId);
+  const { account, available } = await getAccountInvestableBalance(accountId, userId);
 
   if (amount > available) {
     throw new Error(
@@ -216,7 +309,7 @@ export async function createInvestment(formData: FormData) {
     );
   }
 
-  const documentId = await saveOptionalAttachment(formData);
+  const documentId = await saveOptionalAttachment(formData, userId);
 
   await prisma.investment.create({
     data: {
@@ -228,6 +321,7 @@ export async function createInvestment(formData: FormData) {
       notes,
       accountId,
       documentId,
+      userId,
     },
   });
 
@@ -237,13 +331,18 @@ export async function createInvestment(formData: FormData) {
 }
 
 export async function deleteInvestment(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing investment id");
 
-  const investment = await prisma.investment.delete({ where: { id } });
+  let investment;
+  try {
+    investment = await prisma.investment.delete({ where: { id, userId } });
+  } catch {
+    throw new Error("Investment not found");
+  }
   if (investment.documentId) {
-    const document = await prisma.document.delete({ where: { id: investment.documentId } });
+    const document = await prisma.document.delete({ where: { id: investment.documentId, userId } });
     await deleteDocumentFile(document.filePath);
   }
 
@@ -252,14 +351,15 @@ export async function deleteInvestment(formData: FormData) {
 }
 
 export async function createInvestmentReturn(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const investmentId = String(formData.get("investmentId") ?? "");
   const dateRaw = String(formData.get("date") ?? "");
   const amount = parseAmount(formData.get("amount"));
 
   if (!investmentId) throw new Error("Missing investment id");
 
-  const investment = await prisma.investment.findUniqueOrThrow({ where: { id: investmentId } });
+  const investment = await prisma.investment.findFirst({ where: { id: investmentId, userId } });
+  if (!investment) throw new Error("Investment not found");
 
   await prisma.investmentReturn.create({
     data: {
@@ -274,6 +374,8 @@ export async function createInvestmentReturn(formData: FormData) {
   revalidatePath("/");
 }
 
+// Shared across every signed-in user — an external market rate, not
+// personal financial data, so it isn't scoped by userId. See schema.prisma.
 export async function setExchangeRate(formData: FormData) {
   await verifySession();
   const rate = Number(formData.get("rate"));
@@ -302,28 +404,32 @@ export async function setExchangeRate(formData: FormData) {
 }
 
 export async function updateInvestmentStatus(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || !["active", "exited", "lost"].includes(status)) {
     throw new Error("Invalid investment status update");
   }
-  await prisma.investment.update({ where: { id }, data: { status } });
+  try {
+    await prisma.investment.update({ where: { id, userId }, data: { status } });
+  } catch {
+    throw new Error("Investment not found");
+  }
   revalidatePath("/investments");
 }
 
 export async function createStream(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const name = String(formData.get("name") ?? "").trim();
   const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
 
   if (!name) throw new Error("Stream name is required");
   if (!currency) throw new Error("Currency is required");
 
-  const existing = await prisma.stream.findFirst({ where: { name } });
+  const existing = await prisma.stream.findFirst({ where: { name, userId } });
   if (existing) throw new Error(`A stream named "${name}" already exists`);
 
-  await prisma.stream.create({ data: { name, currency } });
+  await prisma.stream.create({ data: { name, currency, userId } });
 
   revalidatePath("/");
   revalidatePath("/streams");
@@ -331,18 +437,22 @@ export async function createStream(formData: FormData) {
 }
 
 export async function deleteStream(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing stream id");
 
-  const transactionCount = await prisma.transaction.count({ where: { streamId: id } });
+  const transactionCount = await prisma.transaction.count({ where: { streamId: id, userId } });
   if (transactionCount > 0) {
     throw new Error(
       `Can't delete: ${transactionCount} transaction(s) still use this stream. Delete or reassign them first.`
     );
   }
 
-  await prisma.stream.delete({ where: { id } });
+  try {
+    await prisma.stream.delete({ where: { id, userId } });
+  } catch {
+    throw new Error("Stream not found");
+  }
 
   revalidatePath("/");
   revalidatePath("/streams");
@@ -350,7 +460,7 @@ export async function deleteStream(formData: FormData) {
 }
 
 export async function createAccount(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const name = String(formData.get("name") ?? "").trim();
   const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
   const type = String(formData.get("type") ?? "").trim() || "bank";
@@ -359,10 +469,10 @@ export async function createAccount(formData: FormData) {
   if (!name) throw new Error("Account name is required");
   if (!currency) throw new Error("Currency is required");
 
-  const existing = await prisma.account.findFirst({ where: { name } });
+  const existing = await prisma.account.findFirst({ where: { name, userId } });
   if (existing) throw new Error(`An account named "${name}" already exists`);
 
-  await prisma.account.create({ data: { name, currency, type, role } });
+  await prisma.account.create({ data: { name, currency, type, role, userId } });
 
   revalidatePath("/");
   revalidatePath("/streams");
@@ -371,14 +481,14 @@ export async function createAccount(formData: FormData) {
 }
 
 export async function deleteAccount(formData: FormData) {
-  await verifySession();
+  const { userId } = await verifySession();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing account id");
 
   const [transactionCount, investmentCount, transferCount] = await Promise.all([
-    prisma.transaction.count({ where: { accountId: id } }),
-    prisma.investment.count({ where: { accountId: id } }),
-    prisma.transfer.count({ where: { OR: [{ fromAccountId: id }, { toAccountId: id }] } }),
+    prisma.transaction.count({ where: { accountId: id, userId } }),
+    prisma.investment.count({ where: { accountId: id, userId } }),
+    prisma.transfer.count({ where: { userId, OR: [{ fromAccountId: id }, { toAccountId: id }] } }),
   ]);
   if (transactionCount > 0 || investmentCount > 0 || transferCount > 0) {
     throw new Error(
@@ -386,7 +496,11 @@ export async function deleteAccount(formData: FormData) {
     );
   }
 
-  await prisma.account.delete({ where: { id } });
+  try {
+    await prisma.account.delete({ where: { id, userId } });
+  } catch {
+    throw new Error("Account not found");
+  }
 
   revalidatePath("/");
   revalidatePath("/streams");

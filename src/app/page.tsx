@@ -13,6 +13,7 @@ import {
   describeRange,
 } from "@/lib/data";
 import { setExchangeRate } from "@/lib/actions";
+import { verifySession } from "@/lib/session";
 import { TrendChart } from "@/components/trend-chart";
 import { PieChartCard } from "@/components/pie-chart-card";
 import { PeriodPicker } from "@/components/period-picker";
@@ -25,20 +26,21 @@ const JOB_STREAMS = new Set(["Job 1", "Job 2"]);
 const TAX_RESERVE_RATE = 0.25;
 
 export default async function DashboardPage(props: PageProps<"/">) {
+  const { userId } = await verifySession();
   const searchParams = await props.searchParams;
   const selection = resolveRangeSelection(searchParams);
   const rangeLabel = describeRange(selection);
 
   const [streams, summaries, { trend, streamNames }, categoryBreakdown, incomeBreakdown, balances, rate, investments] =
     await Promise.all([
-      getStreams(),
-      getStreamSummariesForPeriod(selection),
-      getTrend(selection),
-      getCategoryBreakdown(selection),
-      getIncomeBreakdown(selection),
-      getAccountInvestableBalances(),
+      getStreams(userId),
+      getStreamSummariesForPeriod(userId, selection),
+      getTrend(userId, selection),
+      getCategoryBreakdown(userId, selection),
+      getIncomeBreakdown(userId, selection),
+      getAccountInvestableBalances(userId),
       getLatestRmbToBdtRate(),
-      getInvestmentPortfolio(),
+      getInvestmentPortfolio(userId),
     ]);
 
   const totalsByCurrency = summaries.reduce<Record<string, number>>((acc, s) => {

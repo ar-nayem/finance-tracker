@@ -6,6 +6,7 @@ import {
   getLatestRmbToBdtRate,
 } from "@/lib/data";
 import { createTransaction, deleteTransaction, deleteTransfer } from "@/lib/actions";
+import { verifySession } from "@/lib/session";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { TransferForm } from "@/components/transfer-form";
 import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
@@ -13,11 +14,12 @@ import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
 export const dynamic = "force-dynamic";
 
 export default async function TransactionsPage() {
+  const { userId } = await verifySession();
   const [accounts, streams, transactions, transfers, rate] = await Promise.all([
-    getAccounts(),
-    getStreams(),
-    getRecentTransactions(50),
-    getRecentTransfers(20),
+    getAccounts(userId),
+    getStreams(userId),
+    getRecentTransactions(userId, 50),
+    getRecentTransfers(userId, 20),
     getLatestRmbToBdtRate(),
   ]);
 

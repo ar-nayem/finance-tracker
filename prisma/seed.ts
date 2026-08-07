@@ -9,6 +9,22 @@ const adapter = new PrismaBetterSqlite3({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  let user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!user) {
+    const username = process.env.INITIAL_LOGIN_USERNAME;
+    const password = process.env.INITIAL_LOGIN_PASSWORD;
+    if (!username || !password) {
+      console.log(
+        "No User exists yet, and INITIAL_LOGIN_USERNAME/INITIAL_LOGIN_PASSWORD not set — skipping seed entirely. Set them in .env and re-run to create the first (admin) login."
+      );
+      return;
+    }
+    user = await prisma.user.create({
+      data: { username, passwordHash: hashPassword(password), role: "admin" },
+    });
+    console.log("Seeded initial admin login for:", username);
+  }
+
   const accounts = [
     { name: "Chinese Bank Account", currency: "RMB", type: "bank", role: "operating" },
     { name: "Alipay", currency: "RMB", type: "wallet", role: "operating" },
@@ -21,8 +37,8 @@ async function main() {
 
   const createdAccounts: Record<string, string> = {};
   for (const a of accounts) {
-    const existing = await prisma.account.findFirst({ where: { name: a.name } });
-    const acc = existing ?? (await prisma.account.create({ data: a }));
+    const existing = await prisma.account.findFirst({ where: { name: a.name, userId: user.id } });
+    const acc = existing ?? (await prisma.account.create({ data: { ...a, userId: user.id } }));
     createdAccounts[a.name] = acc.id;
   }
 
@@ -38,25 +54,9 @@ async function main() {
   ];
 
   for (const s of streams) {
-    const existing = await prisma.stream.findFirst({ where: { name: s.name } });
+    const existing = await prisma.stream.findFirst({ where: { name: s.name, userId: user.id } });
     if (!existing) {
-      await prisma.stream.create({ data: s });
-    }
-  }
-
-  const existingCredential = await prisma.appCredential.findFirst();
-  if (!existingCredential) {
-    const username = process.env.INITIAL_LOGIN_USERNAME;
-    const password = process.env.INITIAL_LOGIN_PASSWORD;
-    if (username && password) {
-      await prisma.appCredential.create({
-        data: { username, passwordHash: hashPassword(password) },
-      });
-      console.log("Seeded initial login credential for:", username);
-    } else {
-      console.log(
-        "No AppCredential exists yet, and INITIAL_LOGIN_USERNAME/INITIAL_LOGIN_PASSWORD not set — skipping. Set them in .env and re-run seed to create the first login."
-      );
+      await prisma.stream.create({ data: { ...s, userId: user.id } });
     }
   }
 

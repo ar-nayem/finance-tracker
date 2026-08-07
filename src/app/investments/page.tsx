@@ -13,6 +13,7 @@ import {
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { PieChartCard } from "@/components/pie-chart-card";
 import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
+import { verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,11 @@ const STATUS_OPTIONS = ["active", "exited", "lost"] as const;
 const TYPE_OPTIONS = ["Equity", "Loan", "Profit-share", "Other"] as const;
 
 export default async function InvestmentsPage() {
+  const { userId } = await verifySession();
   const [accountBalances, investments, allocation, rate] = await Promise.all([
-    getAccountInvestableBalances(),
-    getInvestmentPortfolio(),
-    getInvestmentAllocation(),
+    getAccountInvestableBalances(userId),
+    getInvestmentPortfolio(userId),
+    getInvestmentAllocation(userId),
     getLatestRmbToBdtRate(),
   ]);
   const today = new Date().toISOString().slice(0, 10);

@@ -1,10 +1,11 @@
 import {
   getStreamsWithTransactionCounts,
   getAccountsWithUsageCounts,
-  getCredentialUsername,
+  getUser,
 } from "@/lib/data";
 import { createStream, deleteStream, createAccount, deleteAccount } from "@/lib/actions";
 import { ChangeCredentialsForm } from "@/components/change-credentials-form";
+import { verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +13,13 @@ const ACCOUNT_TYPES = ["bank", "wallet", "cash"] as const;
 const ACCOUNT_ROLES = ["operating", "spending", "savings"] as const;
 
 export default async function StreamsPage() {
-  const [streams, accounts, currentUsername] = await Promise.all([
-    getStreamsWithTransactionCounts(),
-    getAccountsWithUsageCounts(),
-    getCredentialUsername(),
+  const { userId } = await verifySession();
+  const [streams, accounts, user] = await Promise.all([
+    getStreamsWithTransactionCounts(userId),
+    getAccountsWithUsageCounts(userId),
+    getUser(userId),
   ]);
+  const currentUsername = user.username;
 
   return (
     <div className="flex flex-col gap-8">

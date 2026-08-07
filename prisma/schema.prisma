@@ -10,12 +10,33 @@ datasource db {
   provider = "sqlite"
 }
 
+// role: "admin" | "user"
+model User {
+  id             String   @id @default(cuid())
+  username       String   @unique
+  passwordHash   String
+  role           String   @default("user")
+  disabled       Boolean  @default(false)
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  streams      Stream[]
+  accounts     Account[]
+  transactions Transaction[]
+  investments  Investment[]
+  transfers    Transfer[]
+  documents    Document[]
+}
+
 // currency: "RMB" | "BDT"
 model Stream {
   id           String        @id @default(cuid())
   name         String
   currency     String
   createdAt    DateTime      @default(now())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
   transactions Transaction[]
 }
 
@@ -28,6 +49,8 @@ model Account {
   type         String
   role         String
   createdAt    DateTime      @default(now())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
   transactions Transaction[]
   investments  Investment[]
   transfersOut Transfer[]    @relation("AccountTransfersOut")
@@ -50,6 +73,8 @@ model Transaction {
   documentId String?   @unique
   document   Document? @relation(fields: [documentId], references: [id])
   createdAt  DateTime  @default(now())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
 }
 
 // Funded directly by a real account/wallet (Alipay, WeChat, bank), never by
@@ -72,6 +97,8 @@ model Investment {
   documentId String?            @unique
   document   Document?          @relation(fields: [documentId], references: [id])
   createdAt  DateTime           @default(now())
+  userId     String
+  user       User               @relation(fields: [userId], references: [id])
 }
 
 // Money moved between two of your own accounts. Not tied to a Stream — a
@@ -91,6 +118,8 @@ model Transfer {
   toCurrency    String
   note          String?
   createdAt     DateTime @default(now())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
 }
 
 model InvestmentReturn {
@@ -112,14 +141,6 @@ model ExchangeRate {
   @@unique([date, fromCurrency, toCurrency])
 }
 
-// Single row: the one login used to access this app.
-model AppCredential {
-  id           String   @id @default(cuid())
-  username     String
-  passwordHash String
-  updatedAt    DateTime @updatedAt
-}
-
 // Optional file attached to a Transaction or Investment (receipts,
 // calculation sheets, transition paperwork). File bytes live on disk under
 // UPLOADS_DIR; this row just tracks metadata + path.
@@ -132,4 +153,6 @@ model Document {
   createdAt   DateTime     @default(now())
   transaction Transaction?
   investment  Investment?
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
 }

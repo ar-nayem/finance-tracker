@@ -4,10 +4,10 @@ import { buildAccountStatementPdf } from "@/lib/invoice";
 import { verifySession } from "@/lib/session";
 
 export async function GET(req: Request, ctx: RouteContext<"/accounts/[id]/statement/pdf">) {
-  await verifySession();
+  const { userId } = await verifySession();
   const { id } = await ctx.params;
 
-  const account = await prisma.account.findUnique({ where: { id } });
+  const account = await prisma.account.findFirst({ where: { id, userId } });
   if (!account) return new Response("Not found", { status: 404 });
 
   const { searchParams } = new URL(req.url);
@@ -16,7 +16,7 @@ export async function GET(req: Request, ctx: RouteContext<"/accounts/[id]/statem
   const from = fromRaw ? new Date(fromRaw) : undefined;
   const to = toRaw ? new Date(toRaw) : undefined;
 
-  const lines = await getAccountStatementLines(id, { from, to });
+  const lines = await getAccountStatementLines(userId, id, { from, to });
   const bytes = await buildAccountStatementPdf(account, lines, { from, to });
   const suffix = fromRaw || toRaw ? `-${fromRaw ?? "start"}_to_${toRaw ?? "now"}` : "";
 

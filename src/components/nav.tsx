@@ -11,10 +11,12 @@ const links = [
   { href: "/streams", label: "Manage" },
 ];
 
-export function Nav() {
+export function Nav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
 
   if (pathname === "/login") return null;
+
+  const allLinks = isAdmin ? [...links, { href: "/admin/users", label: "Admin" }] : links;
 
   return (
     <header className="border-b border-border bg-muted">
@@ -23,7 +25,7 @@ export function Nav() {
           Finance Tracker
         </span>
         <nav className="flex items-center gap-1">
-          {links.map((link) => {
+          {allLinks.map((link) => {
             const active = pathname === link.href;
             return (
               <Link

@@ -5,20 +5,22 @@ import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { PeriodPicker } from "@/components/period-picker";
 import { PieChartCard } from "@/components/pie-chart-card";
 import { TrendChart } from "@/components/trend-chart";
+import { verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const TREND_SERIES = ["Income", "Expense", "Net"];
 
 export default async function StreamDetailPage(props: PageProps<"/streams/[id]">) {
+  const { userId } = await verifySession();
   const { id } = await props.params;
   const searchParams = await props.searchParams;
   const selection = resolveRangeSelection(searchParams);
   const rangeLabel = describeRange(selection);
 
-  const detail = await getStreamDetail(id, selection).catch(() => null);
+  const detail = await getStreamDetail(userId, id, selection).catch(() => null);
   if (!detail) notFound();
-  const trend = await getStreamTrend(id, selection);
+  const trend = await getStreamTrend(userId, id, selection);
 
   const { stream, transactions, income, expense, net, categoryBreakdown, incomeCategoryBreakdown } = detail;
 

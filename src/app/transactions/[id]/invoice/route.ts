@@ -3,11 +3,11 @@ import { buildTransactionInvoicePdf } from "@/lib/invoice";
 import { verifySession } from "@/lib/session";
 
 export async function GET(_req: Request, ctx: RouteContext<"/transactions/[id]/invoice">) {
-  await verifySession();
+  const { userId } = await verifySession();
   const { id } = await ctx.params;
 
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
+  const transaction = await prisma.transaction.findFirst({
+    where: { id, userId },
     include: { account: true, stream: true },
   });
   if (!transaction) return new Response("Not found", { status: 404 });

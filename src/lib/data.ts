@@ -94,38 +94,45 @@ function rangeConfig(selection: RangeSelection): { start: Date; end: Date; bucke
   return { start: selection.from, end: selection.to, bucket };
 }
 
-export async function getStreams() {
-  return prisma.stream.findMany({ orderBy: { createdAt: "asc" } });
+// --- Users ---------------------------------------------------------------
+
+export async function getUser(userId: string) {
+  return prisma.user.findUniqueOrThrow({ where: { id: userId } });
 }
 
-export async function getCredentialUsername() {
-  const credential = await prisma.appCredential.findFirst();
-  return credential?.username ?? null;
+export async function getAllUsers() {
+  return prisma.user.findMany({ orderBy: { createdAt: "asc" } });
 }
 
-export async function getStreamsWithTransactionCounts() {
-  const streams = await getStreams();
+// --- Everything below is scoped to a single user's data ------------------
+
+export async function getStreams(userId: string) {
+  return prisma.stream.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
+}
+
+export async function getStreamsWithTransactionCounts(userId: string) {
+  const streams = await getStreams(userId);
   return Promise.all(
     streams.map(async (stream) => {
-      const transactionCount = await prisma.transaction.count({ where: { streamId: stream.id } });
+      const transactionCount = await prisma.transaction.count({ where: { streamId: stream.id, userId } });
       return { stream, transactionCount };
     })
   );
 }
 
-export async function getAccounts() {
-  return prisma.account.findMany({ orderBy: { createdAt: "asc" } });
+export async function getAccounts(userId: string) {
+  return prisma.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
 }
 
-export async function getAccountsWithUsageCounts() {
-  const accounts = await getAccounts();
+export async function getAccountsWithUsageCounts(userId: string) {
+  const accounts = await getAccounts(userId);
   return Promise.all(
     accounts.map(async (account) => {
       const [transactionCount, investmentCount, transferCount] = await Promise.all([
-        prisma.transaction.count({ where: { accountId: account.id } }),
-        prisma.investment.count({ where: { accountId: account.id } }),
+        prisma.transaction.count({ where: { accountId: account.id, userId } }),
+        prisma.investment.count({ where: { accountId: account.id, userId } }),
         prisma.transfer.count({
-          where: { OR: [{ fromAccountId: account.id }, { toAccountId: account.id }] },
+          where: { userId, OR: [{ fromAccountId: account.id }, { toAccountId: account.id }] },
         }),
       ]);
       return { account, transactionCount, investmentCount, transferCount };
@@ -133,6 +140,8 @@ export async function getAccountsWithUsageCounts() {
   );
 }
 
+// Shared across every signed-in user — an external market rate, not
+// personal financial data. See schema.prisma / actions.ts setExchangeRate.
 export async function getLatestRmbToBdtRate() {
   const rate = await prisma.exchangeRate.findFirst({
     where: { fromCurrency: "RMB", toCurrency: "BDT" },
@@ -141,14 +150,14 @@ export async function getLatestRmbToBdtRate() {
   return rate?.rate ?? null;
 }
 
-export async function getStreamSummariesForPeriod(selection: RangeSelection) {
-  const streams = await getStreams();
+export async function getStreamSummariesForPeriod(userId: string, selection: RangeSelection) {
+  const streams = await getStreams(userId);
   const { start, end } = rangeConfig(selection);
 
   const summaries = await Promise.all(
     streams.map(async (stream) => {
       const transactions = await prisma.transaction.findMany({
-        where: { streamId: stream.id, date: { gte: start, lte: end } },
+        where: { streamId: stream.id, userId, date: { gte: start, lte: end } },
       });
       const income = transactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
       const expense = transactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
@@ -182,8 +191,8 @@ function buildBuckets(selection: RangeSelection) {
         }));
 }
 
-export async function getTrend(selection: RangeSelection) {
-  const streams = await getStreams();
+export async function getTrend(userId: string, selection: RangeSelection) {
+  const streams = await getStreams(userId);
   const buckets = buildBuckets(selection);
 
   const trend = await Promise.all(
@@ -192,7 +201,7 @@ export async function getTrend(selection: RangeSelection) {
 
       for (const stream of streams) {
         const transactions = await prisma.transaction.findMany({
-          where: { streamId: stream.id, date: { gte: b.start, lte: b.end } },
+          where: { streamId: stream.id, userId, date: { gte: b.start, lte: b.end } },
         });
         const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
         const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -209,13 +218,16 @@ export async function getTrend(selection: RangeSelection) {
 // Income/expense/net over time for a single stream — the stream detail
 // page's own trend chart, same bucketing as getTrend but scoped to one
 // stream instead of splitting into a column per stream.
-export async function getStreamTrend(streamId: string, selection: RangeSelection) {
+export async function getStreamTrend(userId: string, streamId: string, selection: RangeSelection) {
+  const stream = await prisma.stream.findFirst({ where: { id: streamId, userId } });
+  if (!stream) throw new Error("Stream not found");
+
   const buckets = buildBuckets(selection);
 
   return Promise.all(
     buckets.map(async (b) => {
       const transactions = await prisma.transaction.findMany({
-        where: { streamId, date: { gte: b.start, lte: b.end } },
+        where: { streamId, userId, date: { gte: b.start, lte: b.end } },
       });
       const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
       const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -226,10 +238,10 @@ export async function getStreamTrend(streamId: string, selection: RangeSelection
 
 // Expense totals by category, split per currency (mixing currencies in one
 // pie would misrepresent the split), for the "Spending by Category" chart.
-export async function getCategoryBreakdown(selection: RangeSelection) {
+export async function getCategoryBreakdown(userId: string, selection: RangeSelection) {
   const { start, end } = rangeConfig(selection);
   const transactions = await prisma.transaction.findMany({
-    where: { type: "expense", date: { gte: start, lte: end } },
+    where: { userId, type: "expense", date: { gte: start, lte: end } },
   });
 
   const byCurrency = new Map<string, Map<string, number>>();
@@ -249,12 +261,12 @@ export async function getCategoryBreakdown(selection: RangeSelection) {
 }
 
 // Income totals by category, split per currency — same shape and grouping
-// key as getCategoryBreakdown (below), just for income instead of expenses,
+// key as getCategoryBreakdown (above), just for income instead of expenses,
 // so the two pies are directly parallel.
-export async function getIncomeBreakdown(selection: RangeSelection) {
+export async function getIncomeBreakdown(userId: string, selection: RangeSelection) {
   const { start, end } = rangeConfig(selection);
   const transactions = await prisma.transaction.findMany({
-    where: { type: "income", date: { gte: start, lte: end } },
+    where: { userId, type: "income", date: { gte: start, lte: end } },
   });
 
   const byCurrency = new Map<string, Map<string, number>>();
@@ -275,8 +287,8 @@ export async function getIncomeBreakdown(selection: RangeSelection) {
 
 // Capital deployed by investment type, split per currency, for the
 // investments page's "Portfolio Allocation" chart.
-export async function getInvestmentAllocation() {
-  const investments = await prisma.investment.findMany();
+export async function getInvestmentAllocation(userId: string) {
+  const investments = await prisma.investment.findMany({ where: { userId } });
 
   const byCurrency = new Map<string, Map<string, number>>();
   for (const inv of investments) {
@@ -294,8 +306,9 @@ export async function getInvestmentAllocation() {
   }));
 }
 
-export async function getInvestmentPortfolio() {
+export async function getInvestmentPortfolio(userId: string) {
   const investments = await prisma.investment.findMany({
+    where: { userId },
     include: { returns: true, account: true, document: true },
     orderBy: { date: "desc" },
   });
@@ -338,8 +351,9 @@ function computeAvailableBalance(account: {
   return { transactionBalance, totalInvested, totalReturned, available };
 }
 
-export async function getAccountInvestableBalances() {
+export async function getAccountInvestableBalances(userId: string) {
   const accounts = await prisma.account.findMany({
+    where: { userId },
     orderBy: { createdAt: "asc" },
     include: {
       transactions: true,
@@ -352,9 +366,9 @@ export async function getAccountInvestableBalances() {
   return accounts.map((account) => ({ account, ...computeAvailableBalance(account) }));
 }
 
-export async function getAccountInvestableBalance(accountId: string) {
-  const account = await prisma.account.findUniqueOrThrow({
-    where: { id: accountId },
+export async function getAccountInvestableBalance(accountId: string, userId: string) {
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, userId },
     include: {
       transactions: true,
       investments: { include: { returns: true } },
@@ -362,6 +376,7 @@ export async function getAccountInvestableBalance(accountId: string) {
       transfersIn: true,
     },
   });
+  if (!account) throw new Error("Account not found");
 
   return { account, ...computeAvailableBalance(account) };
 }
@@ -369,12 +384,13 @@ export async function getAccountInvestableBalance(accountId: string) {
 // Full breakdown for a single stream's detail page: every transaction in
 // range (not just recent), totals, and its own category split — the
 // per-stream "drill in" view the dashboard summary cards link to.
-export async function getStreamDetail(streamId: string, selection: RangeSelection) {
-  const stream = await prisma.stream.findUniqueOrThrow({ where: { id: streamId } });
+export async function getStreamDetail(userId: string, streamId: string, selection: RangeSelection) {
+  const stream = await prisma.stream.findFirst({ where: { id: streamId, userId } });
+  if (!stream) throw new Error("Stream not found");
   const { start, end } = rangeConfig(selection);
 
   const transactions = await prisma.transaction.findMany({
-    where: { streamId, date: { gte: start, lte: end } },
+    where: { streamId, userId, date: { gte: start, lte: end } },
     include: { account: true, document: true },
     orderBy: { date: "desc" },
   });
@@ -405,16 +421,18 @@ export async function getStreamDetail(streamId: string, selection: RangeSelectio
   };
 }
 
-export async function getRecentTransactions(limit = 20) {
+export async function getRecentTransactions(userId: string, limit = 20) {
   return prisma.transaction.findMany({
+    where: { userId },
     include: { account: true, stream: true, document: true },
     orderBy: { date: "desc" },
     take: limit,
   });
 }
 
-export async function getRecentTransfers(limit = 20) {
+export async function getRecentTransfers(userId: string, limit = 20) {
   return prisma.transfer.findMany({
+    where: { userId },
     include: { fromAccount: true, toAccount: true },
     orderBy: { date: "desc" },
     take: limit,
@@ -438,27 +456,31 @@ export type DateRange = { from?: Date; to?: Date };
 // balance is only meaningful as "change over the range" in that case, not a
 // true account balance, since anything before `from` is excluded.
 export async function getAccountStatementLines(
+  userId: string,
   accountId: string,
   range?: DateRange
 ): Promise<StatementLine[]> {
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+  if (!account) throw new Error("Account not found");
+
   const dateFilter =
     range?.from || range?.to
       ? { date: { ...(range.from ? { gte: range.from } : {}), ...(range.to ? { lte: range.to } : {}) } }
       : {};
 
   const [transactions, transfersOut, transfersIn, investments, returns] = await Promise.all([
-    prisma.transaction.findMany({ where: { accountId, ...dateFilter }, include: { stream: true } }),
+    prisma.transaction.findMany({ where: { accountId, userId, ...dateFilter }, include: { stream: true } }),
     prisma.transfer.findMany({
-      where: { fromAccountId: accountId, ...dateFilter },
+      where: { fromAccountId: accountId, userId, ...dateFilter },
       include: { toAccount: true },
     }),
     prisma.transfer.findMany({
-      where: { toAccountId: accountId, ...dateFilter },
+      where: { toAccountId: accountId, userId, ...dateFilter },
       include: { fromAccount: true },
     }),
-    prisma.investment.findMany({ where: { accountId, ...dateFilter } }),
+    prisma.investment.findMany({ where: { accountId, userId, ...dateFilter } }),
     prisma.investmentReturn.findMany({
-      where: { investment: { accountId }, ...dateFilter },
+      where: { investment: { accountId, userId }, ...dateFilter },
       include: { investment: true },
     }),
   ]);
