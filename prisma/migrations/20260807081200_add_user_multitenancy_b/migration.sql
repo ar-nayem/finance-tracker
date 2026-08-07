@@ -1,6 +1,6 @@
 -- DropTable
 PRAGMA foreign_keys=off;
-DROP TABLE "AppCredential";
+DROP TABLE IF EXISTS "AppCredential";
 PRAGMA foreign_keys=on;
 
 -- RedefineTables
