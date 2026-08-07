@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStreamDetail, resolveRangeSelection, describeRange } from "@/lib/data";
+import { getStreamDetail, getStreamTrend, resolveRangeSelection, describeRange } from "@/lib/data";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { PeriodPicker } from "@/components/period-picker";
 import { PieChartCard } from "@/components/pie-chart-card";
+import { TrendChart } from "@/components/trend-chart";
 
 export const dynamic = "force-dynamic";
+
+const TREND_SERIES = ["Income", "Expense", "Net"];
 
 export default async function StreamDetailPage(props: PageProps<"/streams/[id]">) {
   const { id } = await props.params;
@@ -15,6 +18,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
 
   const detail = await getStreamDetail(id, selection).catch(() => null);
   if (!detail) notFound();
+  const trend = await getStreamTrend(id, selection);
 
   const { stream, transactions, income, expense, net, categoryBreakdown, incomeCategoryBreakdown } = detail;
 
@@ -61,6 +65,14 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
           >
             {formatMoney(net, stream.currency)}
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">{rangeLabel} Trend</h2>
+        <p className="text-sm text-foreground/60">Income, expense and net over time, {stream.currency}.</p>
+        <div className="mt-4">
+          <TrendChart data={trend} streamNames={TREND_SERIES} />
         </div>
       </section>
 

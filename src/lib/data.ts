@@ -159,29 +159,32 @@ export async function getStreamSummariesForPeriod(selection: RangeSelection) {
   return summaries;
 }
 
-export async function getTrend(selection: RangeSelection) {
-  const streams = await getStreams();
+function buildBuckets(selection: RangeSelection) {
   const { start, end, bucket } = rangeConfig(selection);
   const spansMultipleYears = differenceInCalendarDays(end, start) > 366;
 
-  const buckets =
-    bucket === "day"
-      ? eachDayOfInterval({ start, end }).map((d) => ({
-          start: startOfDay(d),
-          end: endOfDay(d),
+  return bucket === "day"
+    ? eachDayOfInterval({ start, end }).map((d) => ({
+        start: startOfDay(d),
+        end: endOfDay(d),
+        label: format(d, "MMM d"),
+      }))
+    : bucket === "week"
+      ? eachWeekOfInterval({ start, end }).map((d) => ({
+          start: startOfWeek(d),
+          end: endOfWeek(d),
           label: format(d, "MMM d"),
         }))
-      : bucket === "week"
-        ? eachWeekOfInterval({ start, end }).map((d) => ({
-            start: startOfWeek(d),
-            end: endOfWeek(d),
-            label: format(d, "MMM d"),
-          }))
-        : eachMonthOfInterval({ start, end }).map((d) => ({
-            start: startOfMonth(d),
-            end: endOfMonth(d),
-            label: format(d, spansMultipleYears ? "MMM ''yy" : "MMM"),
-          }));
+      : eachMonthOfInterval({ start, end }).map((d) => ({
+          start: startOfMonth(d),
+          end: endOfMonth(d),
+          label: format(d, spansMultipleYears ? "MMM ''yy" : "MMM"),
+        }));
+}
+
+export async function getTrend(selection: RangeSelection) {
+  const streams = await getStreams();
+  const buckets = buildBuckets(selection);
 
   const trend = await Promise.all(
     buckets.map(async (b) => {
@@ -201,6 +204,24 @@ export async function getTrend(selection: RangeSelection) {
   );
 
   return { trend, streamNames: streams.map((s) => s.name) };
+}
+
+// Income/expense/net over time for a single stream — the stream detail
+// page's own trend chart, same bucketing as getTrend but scoped to one
+// stream instead of splitting into a column per stream.
+export async function getStreamTrend(streamId: string, selection: RangeSelection) {
+  const buckets = buildBuckets(selection);
+
+  return Promise.all(
+    buckets.map(async (b) => {
+      const transactions = await prisma.transaction.findMany({
+        where: { streamId, date: { gte: b.start, lte: b.end } },
+      });
+      const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+      const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+      return { label: b.label, Income: income, Expense: expense, Net: income - expense };
+    })
+  );
 }
 
 // Expense totals by category, split per currency (mixing currencies in one
