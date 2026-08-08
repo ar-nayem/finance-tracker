@@ -5,7 +5,12 @@
 import "dotenv/config";
 import { format, subMonths } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import { getReportSchedule, getUsersWithReportEmail, buildMonthlyReportEmail } from "@/lib/reports";
+import {
+  getReportSchedule,
+  getUsersWithReportEmail,
+  buildMonthlyReportEmail,
+  buildMonthlyReportAttachments,
+} from "@/lib/reports";
 import { sendMail, isMailConfigured } from "@/lib/mail";
 
 async function main() {
@@ -46,7 +51,11 @@ async function main() {
   for (const user of users) {
     try {
       const { subject, text, html } = await buildMonthlyReportEmail(user.id, lastMonth);
-      await sendMail({ to: user.email!, subject, text, html });
+      const attachments = await buildMonthlyReportAttachments(user.id, lastMonth, {
+        displayName: user.displayName,
+        logoDataUrl: user.logoDataUrl,
+      });
+      await sendMail({ to: user.email!, subject, text, html, attachments });
       console.log(`  sent to ${user.email}`);
     } catch (err) {
       // One recipient's failure (bad address, mailbox full) shouldn't stop

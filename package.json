@@ -15,6 +15,7 @@
     "better-sqlite3": "^13.0.2",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "jose": "^6.2.8",
     "next": "16.2.12",
     "nodemailer": "^9.0.5",

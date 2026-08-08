@@ -1,5 +1,5 @@
 import { getAllUsers } from "@/lib/data";
-import { adminResetPassword, toggleUserDisabled } from "@/lib/actions";
+import { adminResetPassword, toggleUserDisabled, adminSetUserReportEmail } from "@/lib/actions";
 import { requireAdmin } from "@/lib/session";
 import { formatDate } from "@/lib/format";
 import { CreateUserForm } from "@/components/create-user-form";
@@ -45,9 +45,27 @@ export default async function AdminUsersPage() {
                   </span>
                 )}
                 <div className="mt-0.5 text-xs text-foreground/40">Created {formatDate(u.createdAt)}</div>
+                <div className="mt-0.5 text-xs text-foreground/40">Report email: {u.email ?? "not set"}</div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <form action={adminSetUserReportEmail} className="flex items-center gap-2">
+                  <input type="hidden" name="id" value={u.id} />
+                  <input
+                    type="email"
+                    name="email"
+                    defaultValue={u.email ?? ""}
+                    placeholder="report email"
+                    className="w-44 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
+                  >
+                    Set email
+                  </button>
+                </form>
+
                 <form action={adminResetPassword} className="flex items-center gap-2">
                   <input type="hidden" name="id" value={u.id} />
                   <input
@@ -91,8 +109,8 @@ export default async function AdminUsersPage() {
       <section className="rounded-lg border border-border bg-muted p-4">
         <h2 className="font-heading text-lg font-semibold">Monthly Reports</h2>
         <p className="text-sm text-foreground/60">
-          Emails each user their income/expense summary for the previous month. Users set their own address under
-          Manage.
+          Emails every user with a report email set their previous month&apos;s income/expense summary, as PDF and
+          Excel attachments. Set an address per user above, or users can set their own under Manage.
         </p>
         <ReportScheduleForm schedule={schedule} />
       </section>

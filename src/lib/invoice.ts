@@ -260,3 +260,82 @@ export async function buildAccountStatementPdf(
 
   return doc.save();
 }
+
+type ReportRow = { stream: { name: string; currency: string }; income: number; expense: number; net: number };
+
+const REPORT_COLUMNS: StatementColumn[] = [
+  { label: "Stream", x: MARGIN, width: 200 },
+  { label: "Currency", x: MARGIN + 208, width: 60 },
+  { label: "Income", x: MARGIN + 276, width: 90, align: "right" },
+  { label: "Expense", x: MARGIN + 374, width: 90, align: "right" },
+  { label: "Net", x: MARGIN + 472, width: 67, align: "right" },
+];
+
+export async function buildMonthlyReportPdf(
+  monthLabel: string,
+  rows: ReportRow[],
+  branding?: Branding
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage(PAGE_SIZE);
+  const { width, height } = page.getSize();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const logo = await embedLogo(doc, branding?.logoDataUrl);
+  const brandName = branding?.displayName || "Finance Tracker";
+
+  let y = height - MARGIN;
+
+  const titleX = drawBrandMark(page, logo, MARGIN, y);
+  page.drawText(brandName, { x: titleX, y, size: 20, font: bold, color: ACCENT });
+  y -= 22;
+  page.drawText(`${monthLabel} Summary`, { x: MARGIN, y, size: 13, font, color: MUTED });
+
+  const issued = `Issued ${formatDate(new Date())}`;
+  page.drawText(issued, {
+    x: width - MARGIN - font.widthOfTextAtSize(issued, 10),
+    y: height - MARGIN,
+    size: 10,
+    font,
+    color: MUTED,
+  });
+
+  y -= 30;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: width - MARGIN, y }, thickness: 1, color: rgb(0.85, 0.85, 0.87) });
+  y -= 26;
+
+  for (const col of REPORT_COLUMNS) {
+    const textWidth = bold.widthOfTextAtSize(col.label, 9);
+    const x = col.align === "right" ? col.x + col.width - textWidth : col.x;
+    page.drawText(col.label, { x, y, size: 9, font: bold, color: MUTED });
+  }
+  y -= 8;
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: width - MARGIN, y }, thickness: 0.5, color: rgb(0.85, 0.85, 0.87) });
+  y -= ROW_HEIGHT;
+
+  for (const row of rows) {
+    const cells = [
+      row.stream.name,
+      row.stream.currency,
+      formatMoney(row.income, row.stream.currency),
+      formatMoney(row.expense, row.stream.currency),
+      formatMoney(row.net, row.stream.currency),
+    ];
+    REPORT_COLUMNS.forEach((col, i) => {
+      const text = cells[i];
+      const textWidth = font.widthOfTextAtSize(text, 9);
+      const x = col.align === "right" ? col.x + col.width - textWidth : col.x;
+      page.drawText(text, { x, y, size: 9, font, color: i === 4 ? (row.net >= 0 ? GOOD : BAD) : INK });
+    });
+    y -= ROW_HEIGHT;
+  }
+
+  if (rows.length === 0) {
+    page.drawText("No transactions recorded.", { x: MARGIN, y, size: 10, font, color: MUTED });
+  }
+
+  const footer = `System-generated report · ${new Date().toISOString()}`;
+  page.drawText(footer, { x: MARGIN, y: 32, size: 8, font, color: MUTED });
+
+  return doc.save();
+}

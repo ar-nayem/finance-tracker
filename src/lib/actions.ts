@@ -9,7 +9,12 @@ import { createSession, deleteSession, verifySession, requireAdmin } from "@/lib
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
 import { getAccountInvestableBalance } from "@/lib/data";
-import { getReportSchedule, getUsersWithReportEmail, buildMonthlyReportEmail } from "@/lib/reports";
+import {
+  getReportSchedule,
+  getUsersWithReportEmail,
+  buildMonthlyReportEmail,
+  buildMonthlyReportAttachments,
+} from "@/lib/reports";
 import { sendMail, isMailConfigured } from "@/lib/mail";
 
 const WRONG_CREDENTIALS_ERROR = "Wrong username or password";
@@ -209,6 +214,24 @@ export async function adminResetPassword(formData: FormData) {
   revalidatePath("/admin/users");
 }
 
+// Lets an admin set report email on a user's behalf, so the monthly send
+// doesn't depend on every user separately visiting Manage and setting their
+// own — the self-service field in updateReportEmail still wins if a user
+// later changes it themselves.
+export async function adminSetUserReportEmail(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const email = String(formData.get("email") ?? "").trim();
+  if (!id) throw new Error("Missing user id");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("That doesn't look like a valid email address");
+  }
+
+  await prisma.user.update({ where: { id }, data: { email: email || null } });
+
+  revalidatePath("/admin/users");
+}
+
 export async function toggleUserDisabled(formData: FormData) {
   const { userId: adminId } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
@@ -275,7 +298,11 @@ export async function adminSendReportsNow(
   const lastMonth = subMonths(new Date(), 1);
   for (const user of users) {
     const { subject, text, html } = await buildMonthlyReportEmail(user.id, lastMonth);
-    await sendMail({ to: user.email!, subject, text, html });
+    const attachments = await buildMonthlyReportAttachments(user.id, lastMonth, {
+      displayName: user.displayName,
+      logoDataUrl: user.logoDataUrl,
+    });
+    await sendMail({ to: user.email!, subject, text, html, attachments });
   }
 
   return { success: `Sent ${users.length} report${users.length === 1 ? "" : "s"}` };
