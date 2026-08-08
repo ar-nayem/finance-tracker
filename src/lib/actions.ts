@@ -4,10 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
+import { subMonths } from "date-fns";
 import { createSession, deleteSession, verifySession, requireAdmin } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { deleteDocumentFile, saveDocumentFile } from "@/lib/documents";
 import { getAccountInvestableBalance } from "@/lib/data";
+import { getReportSchedule, getUsersWithReportEmail, buildMonthlyReportEmail } from "@/lib/reports";
+import { sendMail, isMailConfigured } from "@/lib/mail";
 
 const WRONG_CREDENTIALS_ERROR = "Wrong username or password";
 
@@ -144,6 +147,25 @@ export async function updateBranding(
   return { success: "Branding updated" };
 }
 
+export type ReportEmailState = { error?: string; success?: string } | undefined;
+
+export async function updateReportEmail(
+  _prevState: ReportEmailState,
+  formData: FormData
+): Promise<ReportEmailState> {
+  const { userId } = await verifySession();
+  const email = String(formData.get("email") ?? "").trim();
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "That doesn't look like a valid email address" };
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { email: email || null } });
+
+  revalidatePath("/streams");
+  return { success: email ? "Report email saved" : "Report email removed" };
+}
+
 // --- Admin: user management -------------------------------------------
 
 export type AdminActionState = { error?: string; success?: string } | undefined;
@@ -200,6 +222,63 @@ export async function toggleUserDisabled(formData: FormData) {
   });
 
   revalidatePath("/admin/users");
+}
+
+// --- Admin: monthly report schedule -------------------------------------
+
+export type ReportScheduleState = { error?: string; success?: string } | undefined;
+
+export async function adminUpdateReportSchedule(
+  _prevState: ReportScheduleState,
+  formData: FormData
+): Promise<ReportScheduleState> {
+  await requireAdmin();
+  const enabled = String(formData.get("enabled") ?? "") === "true";
+  const dayOfMonth = Number(formData.get("dayOfMonth"));
+  const hour = Number(formData.get("hour"));
+
+  if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 28) {
+    return { error: "Day of month must be between 1 and 28" };
+  }
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    return { error: "Hour must be between 0 and 23" };
+  }
+
+  const schedule = await getReportSchedule();
+  await prisma.reportSchedule.update({
+    where: { id: schedule.id },
+    data: { enabled, dayOfMonth, hour },
+  });
+
+  revalidatePath("/admin/users");
+  return { success: "Report schedule saved" };
+}
+
+// Manual trigger for the same send the cron script does, scoped to last
+// calendar month — lets an admin verify SMTP + recipients work without
+// waiting for the schedule to fire. Does not touch lastSentYearMonth, so it
+// can't cause the cron to skip (or double-send) its own scheduled run.
+export async function adminSendReportsNow(
+  _prevState: ReportScheduleState,
+  _formData: FormData
+): Promise<ReportScheduleState> {
+  await requireAdmin();
+  if (!isMailConfigured()) {
+    return { error: "Email isn't configured — set SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_FROM in .env" };
+  }
+
+  const users = await getUsersWithReportEmail();
+  if (users.length === 0) {
+    return { error: "No users have a report email set" };
+  }
+
+  const lastMonth = subMonths(new Date(), 1);
+  for (const user of users) {
+    const { subject, text, html } = await buildMonthlyReportEmail(user.id, lastMonth);
+    await sendMail({ to: user.email!, subject, text, html });
+  }
+
+  return { success: `Sent ${users.length} report${users.length === 1 ? "" : "s"}` };
 }
 
 // --- Everything below scoped to the signed-in user ----------------------

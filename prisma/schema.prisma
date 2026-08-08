@@ -31,6 +31,10 @@ model User {
   displayName String?
   logoDataUrl String?
 
+  // Where monthly report emails go. Nullable — most users won't have set
+  // one until they visit Manage, or an admin sets it for them.
+  email String?
+
   streams      Stream[]
   accounts     Account[]
   transactions Transaction[]
@@ -166,6 +170,20 @@ model InvestmentReturn {
   currency     String
   investmentId String
   investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+}
+
+// Singleton (always exactly one row) — admin-controlled schedule for the
+// monthly report email cron (scripts/send-monthly-reports.ts). hour is
+// server local time (UTC on this deployment), not per-user timezone.
+// lastSentYearMonth (e.g. "2026-08") guards against double-sending since the
+// cron checks in every hour, not just at the exact scheduled moment.
+model ReportSchedule {
+  id                String   @id @default(cuid())
+  enabled           Boolean  @default(false)
+  dayOfMonth        Int      @default(1)
+  hour              Int      @default(8)
+  lastSentYearMonth String?
+  updatedAt         DateTime @updatedAt
 }
 
 model ExchangeRate {

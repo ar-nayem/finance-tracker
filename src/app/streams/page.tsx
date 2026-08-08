@@ -6,6 +6,7 @@ import {
 import { createStream, deleteStream, createAccount, deleteAccount } from "@/lib/actions";
 import { ChangeCredentialsForm } from "@/components/change-credentials-form";
 import { BrandingForm } from "@/components/branding-form";
+import { ReportEmailForm } from "@/components/report-email-form";
 import { verifySession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -209,6 +210,14 @@ export default async function StreamsPage() {
           Shown in the nav bar and on generated invoices/statements instead of the default name.
         </p>
         <BrandingForm currentDisplayName={user.displayName} currentLogoDataUrl={user.logoDataUrl} />
+      </section>
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">Monthly Report Email</h2>
+        <p className="text-sm text-foreground/60">
+          Where your monthly income/expense summary gets sent, if the admin has report emails turned on.
+        </p>
+        <ReportEmailForm currentEmail={user.email} />
       </section>
     </div>
   );

@@ -3,12 +3,14 @@ import { adminResetPassword, toggleUserDisabled } from "@/lib/actions";
 import { requireAdmin } from "@/lib/session";
 import { formatDate } from "@/lib/format";
 import { CreateUserForm } from "@/components/create-user-form";
+import { ReportScheduleForm } from "@/components/report-schedule-form";
+import { getReportSchedule } from "@/lib/reports";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
   const { userId: adminId } = await requireAdmin();
-  const users = await getAllUsers();
+  const [users, schedule] = await Promise.all([getAllUsers(), getReportSchedule()]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -84,6 +86,15 @@ export default async function AdminUsersPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">Monthly Reports</h2>
+        <p className="text-sm text-foreground/60">
+          Emails each user their income/expense summary for the previous month. Users set their own address under
+          Manage.
+        </p>
+        <ReportScheduleForm schedule={schedule} />
       </section>
     </div>
   );
