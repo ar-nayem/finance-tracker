@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/session";
 import { formatDate } from "@/lib/format";
 import { CreateUserForm } from "@/components/create-user-form";
 import { ReportScheduleForm } from "@/components/report-schedule-form";
+import { CustomStatementForm } from "@/components/custom-statement-form";
 import { getReportSchedule } from "@/lib/reports";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +114,14 @@ export default async function AdminUsersPage() {
           Excel attachments. Set an address per user above, or users can set their own under Manage.
         </p>
         <ReportScheduleForm schedule={schedule} />
+      </section>
+
+      <section className="rounded-lg border border-border bg-muted p-4">
+        <h2 className="font-heading text-lg font-semibold">Send Custom Statement</h2>
+        <p className="text-sm text-foreground/60">
+          Send a one-off statement for any date range, right now — independent of the monthly schedule above.
+        </p>
+        <CustomStatementForm users={users.map((u) => ({ id: u.id, username: u.username, email: u.email }))} />
       </section>
     </div>
   );

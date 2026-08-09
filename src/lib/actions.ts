@@ -14,6 +14,9 @@ import {
   getUsersWithReportEmail,
   buildMonthlyReportEmail,
   buildMonthlyReportAttachments,
+  buildReportEmail,
+  buildReportAttachments,
+  describeCustomRange,
 } from "@/lib/reports";
 import { sendMail, isMailConfigured } from "@/lib/mail";
 
@@ -321,6 +324,60 @@ export async function adminSendReportsNow(
   }
 
   return { success: `Sent ${users.length} report${users.length === 1 ? "" : "s"}` };
+}
+
+// One-off statement for an arbitrary date range, sent immediately —
+// distinct from the monthly cron/schedule above. Data source (which user's
+// transactions) and destination (recipient email) are separate fields on
+// purpose: an admin might want a user's statement sent somewhere other than
+// that user's own configured report email (e.g. to themselves, or an
+// accountant).
+let sendingCustomStatement = false;
+
+export async function adminSendCustomStatement(
+  _prevState: ReportScheduleState,
+  formData: FormData
+): Promise<ReportScheduleState> {
+  await requireAdmin();
+  if (!isMailConfigured()) {
+    return { error: "Email isn't configured — set SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_FROM in .env" };
+  }
+  if (sendingCustomStatement) {
+    return { error: "Already sending — wait for that to finish before trying again." };
+  }
+
+  const userId = String(formData.get("userId") ?? "");
+  const email = String(formData.get("email") ?? "").trim();
+  const fromDate = new Date(String(formData.get("from") ?? ""));
+  const toDate = new Date(String(formData.get("to") ?? ""));
+
+  if (!userId) return { error: "Pick a user" };
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "That doesn't look like a valid email address" };
+  }
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+    return { error: "Pick both a start and end date" };
+  }
+  if (fromDate > toDate) {
+    return { error: "Start date must be before end date" };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { error: "User not found" };
+
+  sendingCustomStatement = true;
+  try {
+    const { from, to, label, filenameBase } = describeCustomRange(fromDate, toDate);
+    const { subject, text, html } = await buildReportEmail(user.id, from, to, label);
+    const attachments = await buildReportAttachments(user.id, from, to, label, filenameBase, {
+      displayName: user.displayName,
+      logoDataUrl: user.logoDataUrl,
+    });
+    await sendMail({ to: email, subject, text, html, attachments });
+    return { success: `Sent ${label} statement for ${user.username} to ${email}` };
+  } finally {
+    sendingCustomStatement = false;
+  }
 }
 
 // --- Everything below scoped to the signed-in user ----------------------
