@@ -281,6 +281,13 @@ export async function adminUpdateReportSchedule(
 // calendar month — lets an admin verify SMTP + recipients work without
 // waiting for the schedule to fire. Does not touch lastSentYearMonth, so it
 // can't cause the cron to skip (or double-send) its own scheduled run.
+//
+// Module-level lock, not just the button's disabled-while-pending state: a
+// fast double-click (or a submit racing client hydration) can fire two
+// requests before React re-renders the button disabled, and each would
+// otherwise loop over every user and send its own full batch.
+let sendingReportsNow = false;
+
 export async function adminSendReportsNow(
   _prevState: ReportScheduleState,
   _formData: FormData
@@ -289,20 +296,28 @@ export async function adminSendReportsNow(
   if (!isMailConfigured()) {
     return { error: "Email isn't configured — set SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_FROM in .env" };
   }
+  if (sendingReportsNow) {
+    return { error: "Already sending — wait for that to finish before trying again." };
+  }
 
   const users = await getUsersWithReportEmail();
   if (users.length === 0) {
     return { error: "No users have a report email set" };
   }
 
-  const lastMonth = subMonths(new Date(), 1);
-  for (const user of users) {
-    const { subject, text, html } = await buildMonthlyReportEmail(user.id, lastMonth);
-    const attachments = await buildMonthlyReportAttachments(user.id, lastMonth, {
-      displayName: user.displayName,
-      logoDataUrl: user.logoDataUrl,
-    });
-    await sendMail({ to: user.email!, subject, text, html, attachments });
+  sendingReportsNow = true;
+  try {
+    const lastMonth = subMonths(new Date(), 1);
+    for (const user of users) {
+      const { subject, text, html } = await buildMonthlyReportEmail(user.id, lastMonth);
+      const attachments = await buildMonthlyReportAttachments(user.id, lastMonth, {
+        displayName: user.displayName,
+        logoDataUrl: user.logoDataUrl,
+      });
+      await sendMail({ to: user.email!, subject, text, html, attachments });
+    }
+  } finally {
+    sendingReportsNow = false;
   }
 
   return { success: `Sent ${users.length} report${users.length === 1 ? "" : "s"}` };
