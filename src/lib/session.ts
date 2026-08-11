@@ -41,7 +41,7 @@ export async function createSession(userId: string, sessionVersion: number) {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, session, {
     httpOnly: true,
-    secure: false, // no TLS on this deployment yet
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     expires: new Date(Date.now() + SESSION_DURATION_MS),
     path: "/",

@@ -426,6 +426,11 @@ export async function createTransaction(formData: FormData) {
   if (!account) throw new Error("Account not found");
   const stream = await prisma.stream.findFirst({ where: { id: streamId, userId } });
   if (!stream) throw new Error("Stream not found");
+  if (account.currency !== stream.currency) {
+    throw new Error(
+      `Currency mismatch: ${stream.name} is ${stream.currency} but ${account.name} is ${account.currency}. Pick an account in the same currency as the stream.`
+    );
+  }
 
   const documentId = await saveOptionalAttachment(formData, userId);
 
@@ -447,7 +452,6 @@ export async function createTransaction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/transactions");
   revalidatePath("/investments");
-  redirect("/transactions");
 }
 
 export async function updateTransaction(formData: FormData) {
@@ -471,6 +475,11 @@ export async function updateTransaction(formData: FormData) {
   if (!account) throw new Error("Account not found");
   const stream = await prisma.stream.findFirst({ where: { id: streamId, userId } });
   if (!stream) throw new Error("Stream not found");
+  if (account.currency !== stream.currency) {
+    throw new Error(
+      `Currency mismatch: ${stream.name} is ${stream.currency} but ${account.name} is ${account.currency}. Pick an account in the same currency as the stream.`
+    );
+  }
 
   // A newly chosen file replaces the existing attachment; leaving the file
   // input empty keeps whatever was already attached untouched.
@@ -567,7 +576,6 @@ export async function createTransfer(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/transactions");
   revalidatePath("/investments");
-  redirect("/transactions");
 }
 
 export async function deleteTransfer(formData: FormData) {
@@ -624,7 +632,6 @@ export async function createInvestment(formData: FormData) {
 
   revalidatePath("/investments");
   revalidatePath("/");
-  redirect("/investments");
 }
 
 export async function deleteInvestment(formData: FormData) {

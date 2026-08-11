@@ -27,7 +27,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <Link href="/" className="text-sm text-primary hover:underline">
+        <Link href="/" className="link-primary">
           &lt;- Dashboard
         </Link>
       </div>
@@ -48,29 +48,23 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-muted p-4">
-          <div className="text-sm text-foreground/60">Income</div>
-          <div className="mt-1 font-heading text-2xl font-semibold text-accent">
-            {formatMoney(income, stream.currency)}
-          </div>
+        <div className="card">
+          <div className="stat-label">Income</div>
+          <div className="stat-value text-accent">{formatMoney(income, stream.currency)}</div>
         </div>
-        <div className="rounded-lg border border-border bg-muted p-4">
-          <div className="text-sm text-foreground/60">Expense</div>
-          <div className="mt-1 font-heading text-2xl font-semibold text-destructive">
-            {formatMoney(expense, stream.currency)}
-          </div>
+        <div className="card">
+          <div className="stat-label">Expense</div>
+          <div className="stat-value text-destructive">{formatMoney(expense, stream.currency)}</div>
         </div>
-        <div className="rounded-lg border border-border bg-muted p-4">
-          <div className="text-sm text-foreground/60">Net</div>
-          <div
-            className={`mt-1 font-heading text-2xl font-semibold ${net >= 0 ? "text-accent" : "text-destructive"}`}
-          >
+        <div className="card">
+          <div className="stat-label">Net</div>
+          <div className={`stat-value ${net >= 0 ? "text-accent" : "text-destructive"}`}>
             {formatMoney(net, stream.currency)}
           </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">{rangeLabel} Trend</h2>
         <p className="text-sm text-foreground/60">Income, expense and net over time, {stream.currency}.</p>
         <div className="mt-4">
@@ -89,7 +83,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
         </section>
       )}
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">Transactions</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
@@ -121,7 +115,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
                     {t.document ? (
                       <a
                         href={`/documents/${t.document.id}`}
-                        className="text-primary hover:underline"
+                        className="link-primary"
                         title={`${t.document.fileName} (${formatFileSize(t.document.fileSize)})`}
                       >
                         📎 {t.document.fileName}
@@ -135,7 +129,7 @@ export default async function StreamDetailPage(props: PageProps<"/streams/[id]">
                       href={`/transactions/${t.id}/invoice`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline"
+                      className="link-primary text-xs"
                     >
                       Invoice
                     </a>

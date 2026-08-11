@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const SERIES_COLORS = ["#1E40AF", "#3B82F6", "#059669", "#F59E0B"];
+const SERIES_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#7C3AED", "#0891B2"];
 
 export function TrendChart({
   data,

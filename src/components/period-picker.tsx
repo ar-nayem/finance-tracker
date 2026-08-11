@@ -12,11 +12,8 @@ export function PeriodPicker({ basePath, selection }: { basePath: string; select
           <Link
             key={p}
             href={`${basePath}?period=${p}`}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-              selection.kind === "preset" && selection.period === p
-                ? "bg-primary text-on-primary"
-                : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
-            }`}
+            scroll={false}
+            className={`pill ${selection.kind === "preset" && selection.period === p ? "pill-active" : "pill-inactive"}`}
           >
             {p.toUpperCase()}
           </Link>

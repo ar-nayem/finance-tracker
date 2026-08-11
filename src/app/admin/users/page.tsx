@@ -22,12 +22,12 @@ export default async function AdminUsersPage() {
         </p>
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">Create User</h2>
         <CreateUserForm />
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">All Users</h2>
         <div className="mt-3 flex flex-col gap-3">
           {users.map((u) => (
@@ -37,9 +37,7 @@ export default async function AdminUsersPage() {
             >
               <div>
                 <span className="font-medium">{u.username}</span>
-                <span className="ml-2 rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50">
-                  {u.role}
-                </span>
+                <span className="badge ml-2">{u.role}</span>
                 {u.disabled && (
                   <span className="ml-2 rounded-full bg-destructive/20 px-2 py-0.5 text-xs text-destructive">
                     disabled
@@ -57,12 +55,9 @@ export default async function AdminUsersPage() {
                     name="email"
                     defaultValue={u.email ?? ""}
                     placeholder="report email"
-                    className="w-44 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+                    className="input w-44 px-2 py-1 text-xs"
                   />
-                  <button
-                    type="submit"
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
-                  >
+                  <button type="submit" className="btn-ghost-sm border border-border">
                     Set email
                   </button>
                 </form>
@@ -75,12 +70,9 @@ export default async function AdminUsersPage() {
                     placeholder="new password"
                     minLength={8}
                     required
-                    className="w-36 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+                    className="input w-36 px-2 py-1 text-xs"
                   />
-                  <button
-                    type="submit"
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
-                  >
+                  <button type="submit" className="btn-ghost-sm border border-border">
                     Reset password
                   </button>
                 </form>
@@ -107,7 +99,7 @@ export default async function AdminUsersPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">Monthly Reports</h2>
         <p className="text-sm text-foreground/60">
           Emails every user with a report email set their previous month&apos;s income/expense summary, as PDF and
@@ -116,7 +108,7 @@ export default async function AdminUsersPage() {
         <ReportScheduleForm schedule={schedule} />
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">Send Custom Statement</h2>
         <p className="text-sm text-foreground/60">
           Send a one-off statement for any date range, right now — independent of the monthly schedule above.

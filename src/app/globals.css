@@ -1,35 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f172a;
+  --background: #0f1419;
   --foreground: #ffffff;
-  --muted: #101a34;
-  --border: rgba(255, 255, 255, 0.08);
-  --primary: #1e40af;
+  --muted: #1a1f2e;
+  --muted-hover: #262c3f;
+  --border: #2d3748;
+  --primary: #3b82f6;
   --on-primary: #ffffff;
-  --accent: #059669;
-  --destructive: #dc2626;
-  --ring: #1e40af;
+  --accent: #10b981;
+  --destructive: #ef4444;
+  --warning: #f59e0b;
+  --ring: #3b82f6;
 
   /* Consumed directly as CSS var() strings by recharts (trend-chart.tsx,
      pie-chart-card.tsx) — those props take raw color strings, not Tailwind
      classes, so these aren't registered in @theme inline below. */
   --chart-grid: rgba(255, 255, 255, 0.08);
   --chart-axis: rgba(255, 255, 255, 0.5);
-  --chart-tooltip-bg: #101a34;
-  --chart-tooltip-border: rgba(255, 255, 255, 0.08);
+  --chart-tooltip-bg: #1a1f2e;
+  --chart-tooltip-border: #2d3748;
 }
 
 .light {
   --background: #f8fafc;
   --foreground: #0f172a;
-  --muted: #eef2f7;
-  --border: rgba(15, 23, 42, 0.1);
-  --primary: #1e40af;
+  --muted: #ffffff;
+  --muted-hover: #f1f5f9;
+  --border: #e2e8f0;
+  --primary: #2563eb;
   --on-primary: #ffffff;
   --accent: #059669;
   --destructive: #dc2626;
-  --ring: #1e40af;
+  --warning: #d97706;
+  --ring: #2563eb;
 
   --chart-grid: rgba(15, 23, 42, 0.1);
   --chart-axis: rgba(15, 23, 42, 0.55);
@@ -41,11 +45,13 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-muted-hover: var(--muted-hover);
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-on-primary: var(--on-primary);
   --color-accent: var(--accent);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
   --color-ring: var(--ring);
   --font-sans: var(--font-body);
   --font-heading: var(--font-heading);
@@ -55,8 +61,77 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
 }
 
 * {
   border-color: var(--border);
+}
+
+/* Design system: shared component classes so every page/form pulls from one
+   source of truth instead of repeating the same Tailwind utility strings. */
+@layer components {
+  .card {
+    @apply rounded-xl border border-border bg-muted p-6;
+  }
+
+  .card-hero {
+    @apply rounded-xl border border-border bg-muted p-6 sm:p-8;
+  }
+
+  .card-dashed {
+    @apply rounded-xl border border-dashed border-border bg-muted/50 p-8 text-center;
+  }
+
+  .btn-primary {
+    @apply cursor-pointer rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-on-primary transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply cursor-pointer rounded-lg border border-border px-5 py-3 text-sm font-semibold text-foreground/80 transition-colors duration-150 hover:bg-muted-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-ghost-sm {
+    @apply cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-foreground/60 transition-colors duration-150 hover:bg-muted-hover hover:text-foreground;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors duration-150 focus:border-primary focus:ring-2 focus:ring-ring/30;
+  }
+
+  .input-file {
+    @apply w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-on-primary;
+  }
+
+  .field-label {
+    @apply text-sm text-foreground/60;
+  }
+
+  .badge {
+    @apply rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50;
+  }
+
+  .stat-label {
+    @apply text-sm text-foreground/60;
+  }
+
+  .stat-value {
+    @apply mt-1 font-heading text-2xl font-semibold;
+  }
+
+  .pill {
+    @apply rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150;
+  }
+
+  .pill-active {
+    @apply bg-primary text-on-primary;
+  }
+
+  .pill-inactive {
+    @apply text-foreground/70 hover:bg-muted-hover hover:text-foreground;
+  }
+
+  .link-primary {
+    @apply text-sm text-primary hover:underline;
+  }
 }

@@ -3,7 +3,7 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { formatMoney } from "@/lib/format";
 
-const SLICE_COLORS = ["#1E40AF", "#3B82F6", "#059669", "#F59E0B", "#DC2626", "#7C3AED", "#0891B2"];
+const SLICE_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#7C3AED", "#0891B2", "#EC4899"];
 
 export function PieChartCard({
   title,
@@ -17,7 +17,7 @@ export function PieChartCard({
   const hasData = data.some((d) => d.value > 0);
 
   return (
-    <div className="rounded-lg border border-border bg-muted p-4">
+    <div className="card">
       <h3 className="font-heading text-sm font-semibold text-foreground/80">
         {title} <span className="font-normal text-foreground/50">({currency})</span>
       </h3>

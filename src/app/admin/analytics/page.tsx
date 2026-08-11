@@ -26,7 +26,7 @@ export default async function AdminAnalyticsPage() {
         </p>
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">Per-User Summary</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
@@ -44,9 +44,7 @@ export default async function AdminAnalyticsPage() {
                 <tr key={user.id} className="border-b border-border/50">
                   <td className="py-2 pr-3">
                     <span className="font-medium">{user.username}</span>
-                    <span className="ml-2 rounded-full bg-foreground/5 px-2 py-0.5 text-xs text-foreground/50">
-                      {user.role}
-                    </span>
+                    <span className="badge ml-2">{user.role}</span>
                   </td>
                   <td className="py-2 pr-3 text-foreground/70">
                     {lastLogin ? formatDateTime(lastLogin.createdAt) : "never"}
@@ -73,7 +71,7 @@ export default async function AdminAnalyticsPage() {
       </section>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-border bg-muted p-4">
+        <div className="card">
           <h2 className="font-heading text-lg font-semibold">Recent Logins</h2>
           <div className="mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto text-sm">
             {recentLogins.map((event) => (
@@ -92,7 +90,7 @@ export default async function AdminAnalyticsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-muted p-4">
+        <div className="card">
           <h2 className="font-heading text-lg font-semibold">Recent Page Views</h2>
           <div className="mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto text-sm">
             {recentPageViews.map((view) => (

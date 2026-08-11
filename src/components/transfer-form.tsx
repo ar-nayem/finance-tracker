@@ -35,13 +35,13 @@ export function TransferForm({
   return (
     <form action={createTransfer} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">From account</span>
+        <span className="field-label">From account</span>
         <select
           name="fromAccountId"
           required
           value={fromAccountId}
           onChange={(e) => setFromAccountId(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+          className="input"
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
@@ -52,13 +52,13 @@ export function TransferForm({
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">To account</span>
+        <span className="field-label">To account</span>
         <select
           name="toAccountId"
           required
           value={toAccountId}
           onChange={(e) => setToAccountId(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+          className="input"
         >
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
@@ -69,18 +69,12 @@ export function TransferForm({
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">Date</span>
-        <input
-          type="date"
-          name="date"
-          defaultValue={today}
-          required
-          className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-        />
+        <span className="field-label">Date</span>
+        <input type="date" name="date" defaultValue={today} required className="input" />
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">Amount sent{fromAccount ? ` (${fromAccount.currency})` : ""}</span>
+        <span className="field-label">Amount sent{fromAccount ? ` (${fromAccount.currency})` : ""}</span>
         <input
           type="number"
           step="0.01"
@@ -92,14 +86,12 @@ export function TransferForm({
             setFromAmount(e.target.value);
             setToAmount(sameCurrency ? e.target.value : suggestToAmount(e.target.value));
           }}
-          className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+          className="input"
         />
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">
-          Amount received{toAccount ? ` (${toAccount.currency})` : ""}
-        </span>
+        <span className="field-label">Amount received{toAccount ? ` (${toAccount.currency})` : ""}</span>
         <input
           type="number"
           step="0.01"
@@ -109,25 +101,16 @@ export function TransferForm({
           readOnly={sameCurrency}
           value={sameCurrency ? fromAmount : toAmount}
           onChange={(e) => setToAmount(e.target.value)}
-          className={`rounded-md border border-border px-3 py-2 outline-none focus:ring-2 focus:ring-ring ${
-            sameCurrency ? "bg-muted text-foreground/60" : "bg-background"
-          }`}
+          className={`input ${sameCurrency ? "text-foreground/60" : ""}`}
         />
       </label>
 
       <label className="flex flex-col gap-1 text-sm sm:col-span-2 lg:col-span-1">
-        <span className="text-foreground/60">Note (optional)</span>
-        <input
-          type="text"
-          name="note"
-          className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-        />
+        <span className="field-label">Note (optional)</span>
+        <input type="text" name="note" className="input" />
       </label>
 
-      <button
-        type="submit"
-        className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-colors duration-150 hover:bg-primary/90 sm:col-span-2 lg:col-span-3 lg:w-fit"
-      >
+      <button type="submit" className="btn-primary sm:col-span-2 lg:col-span-3 lg:w-fit">
         Transfer
       </button>
     </form>

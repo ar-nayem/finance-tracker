@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   getAccounts,
   getStreams,
@@ -9,6 +10,7 @@ import { createTransaction, deleteTransaction, deleteTransfer } from "@/lib/acti
 import { verifySession } from "@/lib/session";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { TransferForm } from "@/components/transfer-form";
+import { TransactionForm } from "@/components/transaction-form";
 import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
 
 export const dynamic = "force-dynamic";
@@ -24,119 +26,34 @@ export default async function TransactionsPage() {
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
+  const readyToTrack = streams.length > 0 && accounts.length > 0;
 
   return (
     <div className="flex flex-col gap-8">
       <ExchangeRateBanner rate={rate} />
 
-      <section className="rounded-lg border border-border bg-muted p-4">
-        <h1 className="font-heading text-lg font-semibold">Add Transaction</h1>
-        <form action={createTransaction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-foreground/60">Date</span>
-            <input
-              type="date"
-              name="date"
-              defaultValue={today}
-              required
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
+      {readyToTrack ? (
+        <section id="add" className="card scroll-mt-20">
+          <h1 className="font-heading text-lg font-semibold">Add Transaction</h1>
+          <TransactionForm accounts={accounts} streams={streams} today={today} action={createTransaction} />
+        </section>
+      ) : (
+        <section id="add" className="card-dashed scroll-mt-20">
+          <p className="font-heading text-lg font-semibold">Set up streams &amp; accounts first</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-foreground/60">
+            You need at least one income stream and one account before you can record a transaction.
+          </p>
+          <Link href="/streams" className="btn-primary mt-4 inline-block">
+            Set up streams &amp; accounts
+          </Link>
+        </section>
+      )}
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-foreground/60">Type</span>
-            <select
-              name="type"
-              required
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-foreground/60">Amount</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              name="amount"
-              required
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-foreground/60">Stream</span>
-            <select
-              name="streamId"
-              required
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            >
-              {streams.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.currency})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-foreground/60">Account</span>
-            <select
-              name="accountId"
-              required
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({a.currency})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-foreground/60">Category (optional)</span>
-            <input
-              type="text"
-              name="category"
-              placeholder="e.g. salary, client payment, rent"
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm sm:col-span-2 lg:col-span-3">
-            <span className="text-foreground/60">Note (optional)</span>
-            <input
-              type="text"
-              name="note"
-              className="rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm sm:col-span-2 lg:col-span-3">
-            <span className="text-foreground/60">Attach document (optional)</span>
-            <input
-              type="file"
-              name="file"
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-on-primary"
-            />
-          </label>
-
-          <button
-            type="submit"
-            className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-colors duration-150 hover:bg-primary/90 sm:col-span-2 lg:col-span-3 lg:w-fit"
-          >
-            Add transaction
-          </button>
-        </form>
-      </section>
-
-      <section className="rounded-lg border border-border bg-muted p-4">
-        <h2 className="font-heading text-lg font-semibold">Transfer Between Accounts</h2>
+      <details id="transfer" className="group card scroll-mt-20">
+        <summary className="cursor-pointer font-heading text-lg font-semibold marker:content-none">
+          <span className="inline-block transition-transform duration-150 group-open:rotate-90">▸</span> Transfer
+          Between Accounts
+        </summary>
         <p className="mt-1 text-sm text-foreground/60">Move money from one of your accounts to another.</p>
         {accounts.length >= 2 ? (
           <TransferForm accounts={accounts} today={today} suggestedRate={rate} />
@@ -167,10 +84,7 @@ export default async function TransactionsPage() {
                   </span>
                   <form action={deleteTransfer}>
                     <input type="hidden" name="id" value={tr.id} />
-                    <button
-                      type="submit"
-                      className="cursor-pointer text-xs text-foreground/40 hover:text-destructive"
-                    >
+                    <button type="submit" className="btn-ghost-sm hover:text-destructive">
                       Delete
                     </button>
                   </form>
@@ -179,9 +93,9 @@ export default async function TransactionsPage() {
             ))}
           </ul>
         )}
-      </section>
+      </details>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
+      <section className="card">
         <h2 className="font-heading text-lg font-semibold">Recent Transactions</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
@@ -215,7 +129,7 @@ export default async function TransactionsPage() {
                     {t.document ? (
                       <a
                         href={`/documents/${t.document.id}`}
-                        className="text-primary hover:underline"
+                        className="link-primary"
                         title={`${t.document.fileName} (${formatFileSize(t.document.fileSize)})`}
                       >
                         📎 {t.document.fileName}
@@ -226,23 +140,20 @@ export default async function TransactionsPage() {
                   </td>
                   <td className="py-2 pl-3">
                     <div className="flex items-center justify-end gap-3">
-                      <a href={`/transactions/${t.id}/edit`} className="text-xs text-primary hover:underline">
+                      <a href={`/transactions/${t.id}/edit`} className="link-primary text-xs">
                         Edit
                       </a>
                       <a
                         href={`/transactions/${t.id}/invoice`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline"
+                        className="link-primary text-xs"
                       >
                         Invoice
                       </a>
                       <form action={deleteTransaction}>
                         <input type="hidden" name="id" value={t.id} />
-                        <button
-                          type="submit"
-                          className="cursor-pointer text-xs text-foreground/40 hover:text-destructive"
-                        >
+                        <button type="submit" className="btn-ghost-sm hover:text-destructive">
                           Delete
                         </button>
                       </form>
@@ -262,8 +173,11 @@ export default async function TransactionsPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-muted p-4">
-        <h2 className="font-heading text-lg font-semibold">Account Statements</h2>
+      <details className="group card">
+        <summary className="cursor-pointer font-heading text-lg font-semibold marker:content-none">
+          <span className="inline-block transition-transform duration-150 group-open:rotate-90">▸</span> Account
+          Statements
+        </summary>
         <p className="mt-1 text-sm text-foreground/60">
           Pick a date range (or leave blank for full history) and download as CSV or PDF.
         </p>
@@ -291,14 +205,14 @@ export default async function TransactionsPage() {
                   <button
                     type="submit"
                     formAction={`/accounts/${a.id}/statement`}
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
+                    className="btn-ghost-sm border border-border"
                   >
                     CSV
                   </button>
                   <button
                     type="submit"
                     formAction={`/accounts/${a.id}/statement/pdf`}
-                    className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-foreground/5"
+                    className="btn-ghost-sm border border-border"
                   >
                     PDF
                   </button>
@@ -308,7 +222,7 @@ export default async function TransactionsPage() {
           ))}
           {accounts.length === 0 && <p className="text-sm text-foreground/50">No accounts yet.</p>}
         </ul>
-      </section>
+      </details>
     </div>
   );
 }

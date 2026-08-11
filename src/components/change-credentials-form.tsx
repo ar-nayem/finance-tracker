@@ -9,38 +9,23 @@ export function ChangeCredentialsForm({ currentUsername }: { currentUsername: st
   return (
     <form action={formAction} className="mt-4 flex flex-wrap items-end gap-2">
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">Current password</span>
-        <input
-          type="password"
-          name="currentPassword"
-          required
-          className="w-48 rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-        />
+        <span className="field-label">Current password</span>
+        <input type="password" name="currentPassword" required className="input w-48" />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">Username</span>
-        <input
-          type="text"
-          name="newUsername"
-          defaultValue={currentUsername}
-          required
-          className="w-48 rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-        />
+        <span className="field-label">Username</span>
+        <input type="text" name="newUsername" defaultValue={currentUsername} required className="input w-48" />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-foreground/60">New password (optional)</span>
+        <span className="field-label">New password (optional)</span>
         <input
           type="password"
           name="newPassword"
           placeholder="leave blank to keep current"
-          className="w-56 rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+          className="input w-56"
         />
       </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-medium text-on-primary transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
+      <button type="submit" disabled={pending} className="btn-primary">
         {pending ? "Saving..." : "Update login"}
       </button>
 
