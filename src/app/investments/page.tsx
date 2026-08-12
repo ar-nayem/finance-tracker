@@ -8,6 +8,7 @@ import {
 import {
   createInvestment,
   createInvestmentReturn,
+  createInvestmentTopUp,
   deleteInvestment,
   updateInvestmentStatus,
 } from "@/lib/actions";
@@ -35,7 +36,7 @@ export default async function InvestmentsPage() {
   const investedByCurrency = new Map<string, number>();
   const returnedByCurrency = new Map<string, number>();
   for (const inv of investments) {
-    investedByCurrency.set(inv.currency, (investedByCurrency.get(inv.currency) ?? 0) + inv.amount);
+    investedByCurrency.set(inv.currency, (investedByCurrency.get(inv.currency) ?? 0) + inv.totalInvested);
     returnedByCurrency.set(inv.currency, (returnedByCurrency.get(inv.currency) ?? 0) + inv.totalReturned);
   }
 
@@ -211,7 +212,12 @@ export default async function InvestmentsPage() {
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <div>
                 <div className="text-xs text-foreground/50">Invested</div>
-                <div>{formatMoney(inv.amount, inv.currency)}</div>
+                <div>{formatMoney(inv.totalInvested, inv.currency)}</div>
+                {inv.totalToppedUp > 0 && (
+                  <div className="text-xs text-foreground/50">
+                    {formatMoney(inv.amount, inv.currency)} initial + {formatMoney(inv.totalToppedUp, inv.currency)} added
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-xs text-foreground/50">Returned</div>
@@ -229,20 +235,47 @@ export default async function InvestmentsPage() {
               </div>
             </div>
 
-            <form action={createInvestmentReturn} className="mt-3 flex flex-wrap items-end gap-2">
-              <input type="hidden" name="investmentId" value={inv.id} />
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-foreground/50">Return date</span>
-                <input type="date" name="date" defaultValue={today} required className="input px-2 py-1" />
-              </label>
-              <label className="flex flex-col gap-1 text-xs">
-                <span className="text-foreground/50">Amount received</span>
-                <input type="number" step="0.01" min="0.01" name="amount" required className="input w-32 px-2 py-1" />
-              </label>
-              <button type="submit" className="btn-ghost-sm border border-border px-3 py-1.5">
-                Log return
-              </button>
-            </form>
+            {inv.topUps.length > 0 && (
+              <div className="mt-2 text-xs text-foreground/50">
+                {inv.topUps.map((t) => (
+                  <div key={t.id}>
+                    + {formatMoney(t.amount, t.currency)} added on {formatDate(t.date)}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-end gap-4">
+              <form action={createInvestmentTopUp} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="investmentId" value={inv.id} />
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-foreground/50">Top-up date</span>
+                  <input type="date" name="date" defaultValue={today} required className="input px-2 py-1" />
+                </label>
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-foreground/50">Amount to add</span>
+                  <input type="number" step="0.01" min="0.01" name="amount" required className="input w-32 px-2 py-1" />
+                </label>
+                <button type="submit" className="btn-ghost-sm border border-border px-3 py-1.5">
+                  Add more
+                </button>
+              </form>
+
+              <form action={createInvestmentReturn} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="investmentId" value={inv.id} />
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-foreground/50">Return date</span>
+                  <input type="date" name="date" defaultValue={today} required className="input px-2 py-1" />
+                </label>
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-foreground/50">Amount received</span>
+                  <input type="number" step="0.01" min="0.01" name="amount" required className="input w-32 px-2 py-1" />
+                </label>
+                <button type="submit" className="btn-ghost-sm border border-border px-3 py-1.5">
+                  Log return
+                </button>
+              </form>
+            </div>
           </div>
         ))}
         {investments.length === 0 && (

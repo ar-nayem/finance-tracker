@@ -135,6 +135,7 @@ model Investment {
   accountId  String
   account    Account            @relation(fields: [accountId], references: [id])
   returns    InvestmentReturn[]
+  topUps     InvestmentTopUp[]
   documentId String?            @unique
   document   Document?          @relation(fields: [documentId], references: [id])
   createdAt  DateTime           @default(now())
@@ -164,6 +165,19 @@ model Transfer {
 }
 
 model InvestmentReturn {
+  id           String     @id @default(cuid())
+  date         DateTime
+  amount       Float
+  currency     String
+  investmentId String
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+}
+
+// Additional capital put into an already-existing Investment, on top of its
+// original amount. Kept as its own log (like InvestmentReturn) rather than
+// mutated onto Investment.amount, so the funding date/history of each
+// contribution survives — same reasoning as returns.
+model InvestmentTopUp {
   id           String     @id @default(cuid())
   date         DateTime
   amount       Float

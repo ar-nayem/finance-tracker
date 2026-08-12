@@ -21,8 +21,10 @@ export default async function proxy(request: NextRequest) {
   if (token) {
     try {
       const { payload } = await jwtVerify(token, getSecretKey(), { algorithms: ["HS256"] });
-      authenticated = true;
-      userId = typeof payload.userId === "string" ? payload.userId : undefined;
+      if (typeof payload.userId === "string" && typeof payload.sessionVersion === "number") {
+        authenticated = true;
+        userId = payload.userId;
+      }
     } catch {
       authenticated = false;
     }

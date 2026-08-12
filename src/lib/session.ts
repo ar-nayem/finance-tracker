@@ -30,6 +30,7 @@ async function decrypt(token: string | undefined): Promise<SessionPayload | null
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecretKey(), { algorithms: ["HS256"] });
+    if (typeof payload.userId !== "string" || typeof payload.sessionVersion !== "number") return null;
     return payload as unknown as SessionPayload;
   } catch {
     return null;

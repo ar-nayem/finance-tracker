@@ -75,7 +75,7 @@ export default async function DashboardPage(props: PageProps<"/">) {
       }, 0)
     : null;
 
-  const totalInvested = investments.reduce((s, i) => s + i.amount, 0);
+  const totalInvested = investments.reduce((s, i) => s + i.totalInvested, 0);
   const totalReturned = investments.reduce((s, i) => s + i.totalReturned, 0);
   const activeInvestments = investments.filter((i) => i.status === "active").length;
 

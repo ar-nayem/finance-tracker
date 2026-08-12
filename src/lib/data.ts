@@ -333,13 +333,14 @@ export async function getIncomeBreakdown(userId: string, selection: RangeSelecti
 // Capital deployed by investment type, split per currency, for the
 // investments page's "Portfolio Allocation" chart.
 export async function getInvestmentAllocation(userId: string) {
-  const investments = await prisma.investment.findMany({ where: { userId } });
+  const investments = await prisma.investment.findMany({ where: { userId }, include: { topUps: true } });
 
   const byCurrency = new Map<string, Map<string, number>>();
   for (const inv of investments) {
     const typeTotals = byCurrency.get(inv.currency) ?? new Map<string, number>();
     const key = inv.type ?? "Unspecified";
-    typeTotals.set(key, (typeTotals.get(key) ?? 0) + inv.amount);
+    const invested = inv.amount + inv.topUps.reduce((sum, t) => sum + t.amount, 0);
+    typeTotals.set(key, (typeTotals.get(key) ?? 0) + invested);
     byCurrency.set(inv.currency, typeTotals);
   }
 
@@ -354,16 +355,20 @@ export async function getInvestmentAllocation(userId: string) {
 export async function getInvestmentPortfolio(userId: string) {
   const investments = await prisma.investment.findMany({
     where: { userId },
-    include: { returns: true, account: true, document: true },
+    include: { returns: true, topUps: { orderBy: { date: "desc" } }, account: true, document: true },
     orderBy: { date: "desc" },
   });
 
   return investments.map((inv) => {
     const totalReturned = inv.returns.reduce((sum, r) => sum + r.amount, 0);
+    const totalToppedUp = inv.topUps.reduce((sum, t) => sum + t.amount, 0);
+    const totalInvested = inv.amount + totalToppedUp;
     return {
       ...inv,
       totalReturned,
-      roi: inv.amount > 0 ? (totalReturned - inv.amount) / inv.amount : 0,
+      totalToppedUp,
+      totalInvested,
+      roi: totalInvested > 0 ? (totalReturned - totalInvested) / totalInvested : 0,
     };
   });
 }
@@ -376,7 +381,7 @@ export async function getInvestmentPortfolio(userId: string) {
 // below) go through it.
 function computeAvailableBalance(account: {
   transactions: { type: string; amount: number }[];
-  investments: { amount: number; returns: { amount: number }[] }[];
+  investments: { amount: number; returns: { amount: number }[]; topUps: { amount: number }[] }[];
   transfersOut: { fromAmount: number }[];
   transfersIn: { toAmount: number }[];
 }) {
@@ -384,7 +389,10 @@ function computeAvailableBalance(account: {
     (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
     0
   );
-  const totalInvested = account.investments.reduce((sum, i) => sum + i.amount, 0);
+  const totalInvested = account.investments.reduce(
+    (sum, i) => sum + i.amount + i.topUps.reduce((s, t) => s + t.amount, 0),
+    0
+  );
   const totalReturned = account.investments.reduce(
     (sum, i) => sum + i.returns.reduce((s, r) => s + r.amount, 0),
     0
@@ -402,7 +410,7 @@ export async function getAccountInvestableBalances(userId: string) {
     orderBy: { createdAt: "asc" },
     include: {
       transactions: true,
-      investments: { include: { returns: true } },
+      investments: { include: { returns: true, topUps: true } },
       transfersOut: true,
       transfersIn: true,
     },
@@ -416,7 +424,7 @@ export async function getAccountInvestableBalance(accountId: string, userId: str
     where: { id: accountId, userId },
     include: {
       transactions: true,
-      investments: { include: { returns: true } },
+      investments: { include: { returns: true, topUps: true } },
       transfersOut: true,
       transfersIn: true,
     },
@@ -520,7 +528,7 @@ export async function getAccountStatementLines(
       ? { date: { ...(range.from ? { gte: range.from } : {}), ...(range.to ? { lte: range.to } : {}) } }
       : {};
 
-  const [transactions, transfersOut, transfersIn, investments, returns] = await Promise.all([
+  const [transactions, transfersOut, transfersIn, investments, topUps, returns] = await Promise.all([
     prisma.transaction.findMany({ where: { accountId, userId, ...dateFilter }, include: { stream: true } }),
     prisma.transfer.findMany({
       where: { fromAccountId: accountId, userId, ...dateFilter },
@@ -531,6 +539,10 @@ export async function getAccountStatementLines(
       include: { fromAccount: true },
     }),
     prisma.investment.findMany({ where: { accountId, userId, ...dateFilter } }),
+    prisma.investmentTopUp.findMany({
+      where: { investment: { accountId, userId }, ...dateFilter },
+      include: { investment: true },
+    }),
     prisma.investmentReturn.findMany({
       where: { investment: { accountId, userId }, ...dateFilter },
       include: { investment: true },
@@ -560,6 +572,12 @@ export async function getAccountStatementLines(
       date: inv.date,
       description: `Investment: ${inv.name}`,
       debit: inv.amount,
+      credit: 0,
+    })),
+    ...topUps.map((t) => ({
+      date: t.date,
+      description: `Investment top-up: ${t.investment.name}`,
+      debit: t.amount,
       credit: 0,
     })),
     ...returns.map((r) => ({

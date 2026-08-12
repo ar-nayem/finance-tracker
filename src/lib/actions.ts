@@ -654,6 +654,38 @@ export async function deleteInvestment(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function createInvestmentTopUp(formData: FormData) {
+  const { userId } = await verifySession();
+  const investmentId = String(formData.get("investmentId") ?? "");
+  const dateRaw = String(formData.get("date") ?? "");
+  const amount = parseAmount(formData.get("amount"));
+
+  if (!investmentId) throw new Error("Missing investment id");
+
+  const investment = await prisma.investment.findFirst({ where: { id: investmentId, userId } });
+  if (!investment) throw new Error("Investment not found");
+
+  const { account, available } = await getAccountInvestableBalance(investment.accountId, userId);
+
+  if (amount > available) {
+    throw new Error(
+      `Not enough in ${account.name}: available ${available.toFixed(2)} ${account.currency}, tried to add ${amount.toFixed(2)}.`
+    );
+  }
+
+  await prisma.investmentTopUp.create({
+    data: {
+      investmentId,
+      date: dateRaw ? new Date(dateRaw) : new Date(),
+      amount,
+      currency: investment.currency,
+    },
+  });
+
+  revalidatePath("/investments");
+  revalidatePath("/");
+}
+
 export async function createInvestmentReturn(formData: FormData) {
   const { userId } = await verifySession();
   const investmentId = String(formData.get("investmentId") ?? "");
