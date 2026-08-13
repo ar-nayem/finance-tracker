@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "top.arnayem.finance",
+    "sha256_cert_fingerprints": ["F9:B3:31:84:46:22:3A:C1:41:3C:08:B7:88:D1:0D:B1:09:97:1D:BA:79:54:3B:F0:44:3B:70:91:8E:BF:03:8C"]
+  }
+}]
