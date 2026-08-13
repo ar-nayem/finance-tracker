@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Lexend, Source_Sans_3 } from "next/font/google";
 import { Nav } from "@/components/nav";
+import { RegisterServiceWorker } from "@/components/register-sw";
 import { getOptionalUser } from "@/lib/session";
 import { getUserBranding } from "@/lib/data";
 import { getTheme } from "@/lib/theme";
@@ -36,6 +37,7 @@ export default async function RootLayout({
       className={`${lexend.variable} ${sourceSans.variable} h-full antialiased ${theme === "light" ? "light" : "dark"}`}
     >
       <body className="min-h-full flex flex-col">
+        <RegisterServiceWorker />
         <Nav
           isAdmin={session?.role === "admin"}
           displayName={branding?.displayName ?? null}
