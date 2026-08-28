@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Lexend, Source_Sans_3 } from "next/font/google";
 import { Nav } from "@/components/nav";
 import { RegisterServiceWorker } from "@/components/register-sw";
+import { AmountVisibilityProvider } from "@/components/amount-visibility";
 import { getOptionalUser } from "@/lib/session";
 import { getUserBranding } from "@/lib/data";
 import { getTheme } from "@/lib/theme";
@@ -38,13 +39,15 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <RegisterServiceWorker />
-        <Nav
-          isAdmin={session?.role === "admin"}
-          displayName={branding?.displayName ?? null}
-          logoDataUrl={branding?.logoDataUrl ?? null}
-          theme={theme}
-        />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">{children}</main>
+        <AmountVisibilityProvider>
+          <Nav
+            isAdmin={session?.role === "admin"}
+            displayName={branding?.displayName ?? null}
+            logoDataUrl={branding?.logoDataUrl ?? null}
+            theme={theme}
+          />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">{children}</main>
+        </AmountVisibilityProvider>
       </body>
     </html>
   );

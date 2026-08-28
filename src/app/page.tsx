@@ -18,6 +18,7 @@ import { verifySession } from "@/lib/session";
 import { TrendChart } from "@/components/trend-chart";
 import { PieChartCard } from "@/components/pie-chart-card";
 import { PeriodPicker } from "@/components/period-picker";
+import { Amount, AmountVisibilityToggle } from "@/components/amount-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -114,19 +115,24 @@ export default async function DashboardPage(props: PageProps<"/">) {
       <section className="card-hero">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
-            <p className="stat-label">Your total net worth</p>
+            <div className="flex items-center gap-2">
+              <p className="stat-label">Your total net worth</p>
+              <AmountVisibilityToggle />
+            </div>
             <p className="mt-2 font-heading text-4xl font-semibold sm:text-5xl">
               {netWorthInBdt !== null ? (
-                formatMoney(netWorthInBdt, "BDT")
+                <Amount>{formatMoney(netWorthInBdt, "BDT")}</Amount>
               ) : (
                 <span className="text-2xl font-normal text-foreground/50">Set the exchange rate to see this</span>
               )}
             </p>
             {Object.entries(netWorthByCurrency).length > 0 && (
               <p className="mt-2 text-sm text-foreground/50">
-                {Object.entries(netWorthByCurrency)
-                  .map(([currency, amount]) => formatMoney(amount, currency))
-                  .join(" + ")}{" "}
+                <Amount>
+                  {Object.entries(netWorthByCurrency)
+                    .map(([currency, amount]) => formatMoney(amount, currency))
+                    .join(" + ")}
+                </Amount>{" "}
                 across your accounts
               </p>
             )}
@@ -173,7 +179,7 @@ export default async function DashboardPage(props: PageProps<"/">) {
                 <span className="badge ml-2">{account.role}</span>
               </div>
               <span className={available >= 0 ? "text-foreground" : "text-destructive"}>
-                {formatMoney(available, account.currency)}
+                <Amount>{formatMoney(available, account.currency)}</Amount>
               </span>
             </li>
           ))}
@@ -219,14 +225,16 @@ export default async function DashboardPage(props: PageProps<"/">) {
                   <span className="badge">{stream.currency}</span>
                 </div>
                 <div className={`stat-value ${net >= 0 ? "text-accent" : "text-destructive"}`}>
-                  {formatMoney(net, stream.currency)}
+                  <Amount>{formatMoney(net, stream.currency)}</Amount>
                 </div>
                 <div className="mt-1 text-xs text-foreground/50">
-                  +{formatMoney(income, stream.currency)} / -{formatMoney(expense, stream.currency)}
+                  <Amount>
+                    +{formatMoney(income, stream.currency)} / -{formatMoney(expense, stream.currency)}
+                  </Amount>
                 </div>
                 {!JOB_STREAMS.has(stream.name) && net > 0 && (
                   <div className="mt-2 text-xs text-foreground/60">
-                    Reserve {formatMoney(net * TAX_RESERVE_RATE, stream.currency)} for tax (25%)
+                    Reserve <Amount>{formatMoney(net * TAX_RESERVE_RATE, stream.currency)}</Amount> for tax (25%)
                   </div>
                 )}
                 <div className="mt-2 text-xs text-primary">View details -&gt;</div>
@@ -306,11 +314,15 @@ export default async function DashboardPage(props: PageProps<"/">) {
           </div>
           <div className="flex justify-between">
             <span className="text-foreground/60">Total capital deployed</span>
-            <span>{totalInvested.toLocaleString()} (mixed currency)</span>
+            <span>
+              <Amount>{totalInvested.toLocaleString()}</Amount> (mixed currency)
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-foreground/60">Total returned</span>
-            <span>{totalReturned.toLocaleString()} (mixed currency)</span>
+            <span>
+              <Amount>{totalReturned.toLocaleString()}</Amount> (mixed currency)
+            </span>
           </div>
           <Link href="/investments" className="link-primary mt-2">
             View all investments -&gt;
@@ -337,8 +349,10 @@ export default async function DashboardPage(props: PageProps<"/">) {
                 <span className="badge hidden sm:inline">{t.stream.name}</span>
               </div>
               <span className={t.type === "income" ? "text-accent" : "text-destructive"}>
-                {t.type === "income" ? "+" : "-"}
-                {formatMoney(t.amount, t.currency)}
+                <Amount>
+                  {t.type === "income" ? "+" : "-"}
+                  {formatMoney(t.amount, t.currency)}
+                </Amount>
               </span>
             </li>
           ))}
