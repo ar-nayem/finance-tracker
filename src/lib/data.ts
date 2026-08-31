@@ -169,6 +169,14 @@ export async function getAccounts(userId: string) {
   return prisma.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
 }
 
+export async function getTransferFeeRules(userId: string) {
+  return prisma.transferFeeRule.findMany({
+    where: { userId },
+    include: { fromAccount: true, toAccount: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 export async function getAccountsWithUsageCounts(userId: string) {
   const accounts = await getAccounts(userId);
   return Promise.all(

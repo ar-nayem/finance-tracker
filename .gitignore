@@ -46,6 +46,7 @@ next-env.d.ts
 /prisma/dev.db
 /prisma/*.db-journal
 *.db
+dev.db.bak-*
 
 # uploaded documents (personal files, never commit)
 /uploads

@@ -4,15 +4,18 @@ import { useState } from "react";
 import { createTransfer } from "@/lib/actions";
 
 type TransferAccount = { id: string; name: string; currency: string };
+type FeeRule = { fromAccountId: string; toAccountId: string; feeType: string; feeValue: number };
 
 export function TransferForm({
   accounts,
   today,
   suggestedRate,
+  feeRules = [],
 }: {
   accounts: TransferAccount[];
   today: string;
   suggestedRate: number | null;
+  feeRules?: FeeRule[];
 }) {
   const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id ?? "");
@@ -23,12 +26,23 @@ export function TransferForm({
   const toAccount = accounts.find((a) => a.id === toAccountId);
   const sameCurrency = !!fromAccount && !!toAccount && fromAccount.currency === toAccount.currency;
 
+  const feeRule = feeRules.find((r) => r.fromAccountId === fromAccountId && r.toAccountId === toAccountId);
+  const amountNum = Number(fromAmount);
+  const feeAmount =
+    feeRule && Number.isFinite(amountNum) && amountNum > 0
+      ? Math.min(
+          Math.max(feeRule.feeType === "percent" ? (amountNum * feeRule.feeValue) / 100 : feeRule.feeValue, 0),
+          amountNum
+        )
+      : 0;
+
   function suggestToAmount(amount: string) {
     if (!suggestedRate || !fromAccount || !toAccount) return "";
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) return "";
-    if (fromAccount.currency === "RMB" && toAccount.currency === "BDT") return (n * suggestedRate).toFixed(2);
-    if (fromAccount.currency === "BDT" && toAccount.currency === "RMB") return (n / suggestedRate).toFixed(2);
+    const net = n - feeAmount;
+    if (fromAccount.currency === "RMB" && toAccount.currency === "BDT") return (net * suggestedRate).toFixed(2);
+    if (fromAccount.currency === "BDT" && toAccount.currency === "RMB") return (net / suggestedRate).toFixed(2);
     return "";
   }
 
@@ -88,6 +102,12 @@ export function TransferForm({
           }}
           className="input"
         />
+        {feeRule && feeAmount > 0 && fromAccount && (
+          <span className="text-xs text-foreground/50">
+            Fee: {feeAmount.toFixed(2)} {fromAccount.currency}
+            {feeRule.feeType === "percent" ? ` (${feeRule.feeValue}%)` : ""}
+          </span>
+        )}
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
@@ -99,7 +119,7 @@ export function TransferForm({
           name="toAmount"
           required={!sameCurrency}
           readOnly={sameCurrency}
-          value={sameCurrency ? fromAmount : toAmount}
+          value={sameCurrency ? (feeAmount > 0 ? (amountNum - feeAmount).toFixed(2) : fromAmount) : toAmount}
           onChange={(e) => setToAmount(e.target.value)}
           className={`input ${sameCurrency ? "text-foreground/60" : ""}`}
         />

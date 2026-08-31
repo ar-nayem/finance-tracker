@@ -5,11 +5,13 @@ import {
   getRecentTransactions,
   getRecentTransfers,
   getLatestRmbToBdtRate,
+  getTransferFeeRules,
 } from "@/lib/data";
 import { createTransaction, deleteTransaction, deleteTransfer } from "@/lib/actions";
 import { verifySession } from "@/lib/session";
 import { formatMoney, formatDate, formatFileSize } from "@/lib/format";
 import { TransferForm } from "@/components/transfer-form";
+import { TransferFeeForm } from "@/components/transfer-fee-form";
 import { TransactionForm } from "@/components/transaction-form";
 import { ExchangeRateBanner } from "@/components/exchange-rate-banner";
 
@@ -17,12 +19,13 @@ export const dynamic = "force-dynamic";
 
 export default async function TransactionsPage() {
   const { userId } = await verifySession();
-  const [accounts, streams, transactions, transfers, rate] = await Promise.all([
+  const [accounts, streams, transactions, transfers, rate, feeRules] = await Promise.all([
     getAccounts(userId),
     getStreams(userId),
     getRecentTransactions(userId, 50),
     getRecentTransfers(userId, 20),
     getLatestRmbToBdtRate(),
+    getTransferFeeRules(userId),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -56,7 +59,7 @@ export default async function TransactionsPage() {
         </summary>
         <p className="mt-1 text-sm text-foreground/60">Move money from one of your accounts to another.</p>
         {accounts.length >= 2 ? (
-          <TransferForm accounts={accounts} today={today} suggestedRate={rate} />
+          <TransferForm accounts={accounts} today={today} suggestedRate={rate} feeRules={feeRules} />
         ) : (
           <p className="mt-4 text-sm text-foreground/50">Add at least two accounts to transfer money.</p>
         )}
@@ -81,6 +84,11 @@ export default async function TransactionsPage() {
                     {tr.fromCurrency !== tr.toCurrency && (
                       <span className="text-foreground/50"> → {formatMoney(tr.toAmount, tr.toCurrency)}</span>
                     )}
+                    {tr.feeAmount > 0 && (
+                      <span className="ml-2 text-xs text-foreground/40">
+                        (fee {formatMoney(tr.feeAmount, tr.fromCurrency)})
+                      </span>
+                    )}
                   </span>
                   <form action={deleteTransfer}>
                     <input type="hidden" name="id" value={tr.id} />
@@ -93,6 +101,8 @@ export default async function TransactionsPage() {
             ))}
           </ul>
         )}
+
+        {accounts.length >= 2 && <TransferFeeForm accounts={accounts} feeRules={feeRules} />}
       </details>
 
       <section className="card">

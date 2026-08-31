@@ -390,6 +390,11 @@ function parseAmount(raw: FormDataEntryValue | null): number {
   return value;
 }
 
+function computeTransferFee(rule: { feeType: string; feeValue: number }, fromAmount: number): number {
+  const raw = rule.feeType === "percent" ? (fromAmount * rule.feeValue) / 100 : rule.feeValue;
+  return Math.min(Math.max(raw, 0), fromAmount);
+}
+
 // Optional attachment on a transaction/investment creation form. Absent or
 // empty file input means "no attachment" — never required.
 async function saveOptionalAttachment(formData: FormData, userId: string): Promise<string | null> {
@@ -550,7 +555,7 @@ export async function createTransfer(formData: FormData) {
   const toAccount = await prisma.account.findFirst({ where: { id: toAccountId, userId } });
   if (!toAccount) throw new Error("Destination account not found");
 
-  const toAmount =
+  const requestedToAmount =
     fromAccount.currency === toAccount.currency ? fromAmount : parseAmount(formData.get("toAmount"));
 
   if (fromAmount > available) {
@@ -558,6 +563,15 @@ export async function createTransfer(formData: FormData) {
       `Not enough in ${fromAccount.name}: available ${available.toFixed(2)} ${fromAccount.currency}, tried to transfer ${fromAmount.toFixed(2)}.`
     );
   }
+
+  const feeRule = await prisma.transferFeeRule.findUnique({
+    where: { fromAccountId_toAccountId: { fromAccountId, toAccountId } },
+  });
+  const feeAmount = feeRule ? computeTransferFee(feeRule, fromAmount) : 0;
+  // Fee is taken out of what leaves fromAccount; scale the credited amount
+  // down by the same fraction so a manually-entered cross-currency amount
+  // still reflects the cost.
+  const toAmount = requestedToAmount * ((fromAmount - feeAmount) / fromAmount);
 
   await prisma.transfer.create({
     data: {
@@ -568,6 +582,7 @@ export async function createTransfer(formData: FormData) {
       toAccountId,
       toAmount,
       toCurrency: toAccount.currency,
+      feeAmount,
       note,
       userId,
     },
@@ -592,6 +607,47 @@ export async function deleteTransfer(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/transactions");
   revalidatePath("/investments");
+}
+
+export async function setTransferFeeRule(formData: FormData) {
+  const { userId } = await verifySession();
+  const fromAccountId = String(formData.get("fromAccountId") ?? "");
+  const toAccountId = String(formData.get("toAccountId") ?? "");
+  const feeType = String(formData.get("feeType") ?? "");
+  const feeValue = Number(formData.get("feeValue"));
+
+  if (!fromAccountId || !toAccountId) throw new Error("Both accounts are required");
+  if (fromAccountId === toAccountId) throw new Error("Can't set a fee from an account to itself");
+  if (feeType !== "percent" && feeType !== "fixed") throw new Error("Invalid fee type");
+  if (!Number.isFinite(feeValue) || feeValue < 0) throw new Error("Fee must be a non-negative number");
+
+  const [fromAccount, toAccount] = await Promise.all([
+    prisma.account.findFirst({ where: { id: fromAccountId, userId } }),
+    prisma.account.findFirst({ where: { id: toAccountId, userId } }),
+  ]);
+  if (!fromAccount || !toAccount) throw new Error("Account not found");
+
+  await prisma.transferFeeRule.upsert({
+    where: { fromAccountId_toAccountId: { fromAccountId, toAccountId } },
+    create: { fromAccountId, toAccountId, feeType, feeValue, userId },
+    update: { feeType, feeValue },
+  });
+
+  revalidatePath("/transactions");
+}
+
+export async function deleteTransferFeeRule(formData: FormData) {
+  const { userId } = await verifySession();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing fee rule id");
+
+  try {
+    await prisma.transferFeeRule.delete({ where: { id, userId } });
+  } catch {
+    throw new Error("Fee rule not found");
+  }
+
+  revalidatePath("/transactions");
 }
 
 export async function createInvestment(formData: FormData) {

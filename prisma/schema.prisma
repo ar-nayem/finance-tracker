@@ -35,14 +35,15 @@ model User {
   // one until they visit Manage, or an admin sets it for them.
   email String?
 
-  streams      Stream[]
-  accounts     Account[]
-  transactions Transaction[]
-  investments  Investment[]
-  transfers    Transfer[]
-  documents    Document[]
-  loginEvents  LoginEvent[]
-  pageViews    PageView[]
+  streams          Stream[]
+  accounts         Account[]
+  transactions     Transaction[]
+  investments      Investment[]
+  transfers        Transfer[]
+  transferFeeRules TransferFeeRule[]
+  documents        Document[]
+  loginEvents      LoginEvent[]
+  pageViews        PageView[]
 }
 
 // One row per successful login — admin-only visitor analysis. IP/user-agent
@@ -96,6 +97,8 @@ model Account {
   investments  Investment[]
   transfersOut Transfer[]    @relation("AccountTransfersOut")
   transfersIn  Transfer[]    @relation("AccountTransfersIn")
+  feeRulesFrom TransferFeeRule[] @relation("FeeRuleFrom")
+  feeRulesTo   TransferFeeRule[] @relation("FeeRuleTo")
 }
 
 // type: "income" | "expense"
@@ -158,10 +161,31 @@ model Transfer {
   toAccount     Account  @relation("AccountTransfersIn", fields: [toAccountId], references: [id])
   toAmount      Float
   toCurrency    String
+  // Cost deducted from fromAmount before crediting toAccount, in fromCurrency.
+  // Populated from a matching TransferFeeRule at creation time (0 if none).
+  feeAmount     Float    @default(0)
   note          String?
   createdAt     DateTime @default(now())
   userId        String
   user          User     @relation(fields: [userId], references: [id])
+}
+
+// A standing cost the user has configured for transfers along one specific
+// account -> account route (e.g. "0.1% moving RMB wallet -> BDT wallet").
+// Looked up by exact (fromAccountId, toAccountId) at transfer time.
+model TransferFeeRule {
+  id            String   @id @default(cuid())
+  fromAccountId String
+  fromAccount   Account  @relation("FeeRuleFrom", fields: [fromAccountId], references: [id], onDelete: Cascade)
+  toAccountId   String
+  toAccount     Account  @relation("FeeRuleTo", fields: [toAccountId], references: [id], onDelete: Cascade)
+  feeType       String // "percent" | "fixed"
+  feeValue      Float
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@unique([fromAccountId, toAccountId])
 }
 
 model InvestmentReturn {
