@@ -9,10 +9,11 @@ export function formatMoney(amount: number, currency: string): string {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: iso,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
     }).format(amount);
   } catch {
-    return `${amount.toFixed(0)} ${currency}`;
+    return `${amount.toFixed(2)} ${currency}`;
   }
 }
 
